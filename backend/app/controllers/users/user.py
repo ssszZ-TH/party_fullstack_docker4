@@ -105,6 +105,17 @@ async def update_other_user_endpoint(user_id: int, user: UserUpdate, current_use
     logger.info(f"Updated user: id={user_id}, role={result.role}")
     return result
 
+# Delete current user (self-deletion for any role)
+@router.delete("/me")
+async def delete_self_endpoint(current_user: dict = Depends(get_current_user)):
+    user_id = int(current_user["id"])
+    result = await delete_user(user_id)
+    if not result:
+        logger.warning(f"User not found for self-deletion: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Self-deleted user: id={user_id}")
+    return {"message": "User deleted"}
+
 # Delete user (system_admin only)
 @router.delete("/{user_id}")
 async def delete_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)):
@@ -116,15 +127,4 @@ async def delete_user_endpoint(user_id: int, current_user: dict = Depends(get_cu
         logger.warning(f"User not found for deletion: id={user_id}")
         raise HTTPException(status_code=404, detail="User not found")
     logger.info(f"Deleted user: id={user_id}")
-    return {"message": "User deleted"}
-
-# Delete current user (self-deletion for any role)
-@router.delete("/me")
-async def delete_self_endpoint(current_user: dict = Depends(get_current_user)):
-    user_id = int(current_user["id"])
-    result = await delete_user(user_id)
-    if not result:
-        logger.warning(f"User not found for self-deletion: id={user_id}")
-        raise HTTPException(status_code=404, detail="User not found")
-    logger.info(f"Self-deleted user: id={user_id}")
     return {"message": "User deleted"}
