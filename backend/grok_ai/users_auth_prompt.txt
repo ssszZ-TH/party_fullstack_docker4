@@ -1,0 +1,755 @@
+นี่คือ main.py
+
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.config.database import database
+from app.controllers.auth.auth import router as auth_router
+
+
+
+# โหลด .env ก่อน import อื่นๆ
+load_dotenv()
+
+app = FastAPI()
+
+# CORS สำหรับ frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# รวม routers
+app.include_router(auth_router)
+
+
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
+
+@app.get("/")
+async def root():
+    return {"message": "FastAPI Backend","github":"https://github.com/ssszZ-TH/party_fullstack_docker4"}
+
+นี่คือ user schema
+
+from pydantic import BaseModel, EmailStr
+from typing import Optional
+
+# Schema สำหรับสร้างผู้ใช้ใหม่
+class UserCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    role: str = None  # default is None
+
+# Schema สำหรับอัปเดตผู้ใช้
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    role: Optional[str] = None  # อธิบาย: อนุญาตให้อัปเดต role แต่ default เป็น None
+
+# Schema สำหรับ response
+class UserOut(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    password: Optional[str] = None
+    role: Optional[str] = None  # อธิบาย: รวม role ใน response เพื่อให้ frontend ทราบว่าเป็น admin
+
+    class Config:
+        # อธิบาย: อนุญาตให้แปลงจาก Row object (จาก databases) เป็น UserOut
+        from_attributes = True
+
+# Schema สำหรับ login
+class UserLogin(BaseModel):
+    email: EmailStr  # อธิบาย: ใช้ EmailStr เพื่อ validate รูปแบบ email
+    password: str
+
+นี่คือ user model
+
+from app.config.database import database
+from app.config.settings import BCRYPT_SALT
+from app.schemas.user import UserCreate, UserUpdate, UserOut
+import bcrypt
+import logging
+from typing import Optional, List
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def get_user_by_email(email: str) -> Optional[dict]:
+    query = "SELECT id, name, email, password, role FROM users WHERE email = :email"
+    result = await database.fetch_one(query=query, values={"email": email})
+    logger.info(f"Queried user with email {email}: {result}")
+    return result
+
+async def create_user(user: UserCreate) -> Optional[UserOut]:
+    try:
+        existing_user = await get_user_by_email(user.email)
+        if existing_user:
+            logger.warning(f"Attempt to create user with existing email: {user.email}")
+            return None
+        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+        logger.info(f"Hashed password for {user.email}: {hashed_password}")
+        query = """
+            INSERT INTO users (name, email, password, role)
+            VALUES (:name, :email, :password, :role)
+            RETURNING id, name, email, role
+        """
+        values = {
+            "name": user.name,
+            "email": user.email,
+            "password": hashed_password,
+            "role": user.role
+        }
+        result = await database.fetch_one(query=query, values=values)
+        logger.info(f"Created user: {user.email}, role: {user.role}")
+        return UserOut(**result._mapping) if result else None
+    except ValueError as e:
+        logger.error(f"Error hashing password for {user.email}: {str(e)}")
+        raise
+
+async def get_user(user_id: int) -> Optional[UserOut]:
+    query = "SELECT id, name, email, role FROM users WHERE id = :id"
+    result = await database.fetch_one(query=query, values={"id": user_id})
+    logger.info(f"Retrieved user: id={user_id}")
+    return UserOut(**result._mapping) if result else None
+
+async def get_all_users() -> List[UserOut]:
+    query = "SELECT id, name, email, role FROM users ORDER BY id ASC"
+    results = await database.fetch_all(query=query)
+    logger.info(f"Retrieved {len(results)} users")
+    return [UserOut(**result._mapping) for result in results]
+
+async def update_user(user_id: int, user: UserUpdate) -> Optional[UserOut]:
+    values = {"id": user_id}
+    query_parts = []
+    
+    if user.name is not None:
+        query_parts.append("name = :name")
+        values["name"] = user.name
+    if user.email is not None:
+        query_parts.append("email = :email")
+        values["email"] = user.email
+    if user.password is not None:
+        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+        query_parts.append("password = :password")
+        values["password"] = hashed_password
+    if user.role is not None:
+        query_parts.append("role = :role")
+        values["role"] = user.role
+    else:
+        query_parts.append("role = :role")
+        values["role"] = "admin"
+
+    if not query_parts:
+        logger.info(f"No fields to update for user id={user_id}")
+        return None
+
+    query = f"""
+        UPDATE users
+        SET {', '.join(query_parts)}
+        WHERE id = :id
+        RETURNING id, name, email, role
+    """
+    result = await database.fetch_one(query=query, values=values)
+    logger.info(f"Updated user: id={user_id}")
+    return UserOut(**result._mapping) if result else None
+
+async def delete_user(user_id: int) -> Optional[int]:
+    query = "DELETE FROM users WHERE id = :id RETURNING id"
+    result = await database.fetch_one(query=query, values={"id": user_id})
+    logger.info(f"Deleted user: id={user_id}")
+    return result["id"] if result else None
+
+async def verify_user_password(user_id: int, password: str) -> bool:
+    query = "SELECT password FROM users WHERE id = :id"
+    result = await database.fetch_one(query=query, values={"id": user_id})
+    if not result:
+        logger.warning(f"User not found for password verification: id={user_id}")
+        return False
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+    logger.info(f"Verified password for user id={user_id}")
+    return hashed_password == result["password"]
+
+นี่คือ user controller
+
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
+from typing import List
+import logging
+from app.models.users.user import create_user, get_user, update_user, delete_user, get_all_users
+from app.schemas.user import UserCreate, UserUpdate, UserOut
+from app.config.settings import SECRET_KEY
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        logger.info(f"Decoded JWT payload: {payload}")
+        user_id: str = payload.get("sub")
+        role: str = payload.get("role")
+        if user_id is None or role != "admin":
+            logger.error(f"Invalid token: missing 'sub' or role is not 'admin' (role={role})")
+            raise HTTPException(status_code=401, detail="Admin access required")
+        logger.info(f"Authenticated user: id={user_id}, role={role}")
+        return {"id": user_id, "role": role}
+    except JWTError as e:
+        logger.error(f"JWT decode failed: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@router.post("/", response_model=UserOut)
+async def create_user_endpoint(user: UserCreate, current_user: dict = Depends(get_current_user)):
+    result = await create_user(user)
+    if not result:
+        logger.warning(f"Failed to create user: {user.email}")
+        raise HTTPException(status_code=400, detail="Email already exists")
+    logger.info(f"Created user: {user.email}, role={result.role}")
+    return result
+
+@router.get("/me", response_model=UserOut)
+async def get_current_user_endpoint(current_user: dict = Depends(get_current_user)):
+    user_id = int(current_user["id"])
+    result = await get_user(user_id)
+    if not result:
+        logger.warning(f"User not found: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Retrieved current user: id={user_id}, role={result.role}")
+    return result
+
+@router.get("/{user_id}", response_model=UserOut)
+async def get_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)):
+    result = await get_user(user_id)
+    if not result:
+        logger.warning(f"User not found: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Retrieved user: id={user_id}, role={result.role}")
+    return result
+
+@router.get("/", response_model=List[UserOut])
+async def get_all_users_endpoint(current_user: dict = Depends(get_current_user)):
+    results = await get_all_users()
+    logger.info(f"Retrieved {len(results)} users")
+    return results
+
+@router.put("/{user_id}", response_model=UserOut)
+async def update_user_endpoint(user_id: int, user: UserUpdate, current_user: dict = Depends(get_current_user)):
+    result = await update_user(user_id, user)
+    if not result:
+        logger.warning(f"User not found for update: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Updated user: id={user_id}, role={result.role}")
+    return result
+
+@router.delete("/{user_id}")
+async def delete_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)):
+    result = await delete_user(user_id)
+    if not result:
+        logger.warning(f"User not found for deletion: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Deleted user: id={user_id}")
+    return {"message": "User deleted"}
+
+นี่คือ นี่คือ auth.py
+
+# นำเข้าโมดูลที่จำเป็นสำหรับ FastAPI, JWT, การจัดการฐานข้อมูล และ logging
+from fastapi import APIRouter, HTTPException
+from jose import jwt, JWTError
+from datetime import datetime, timedelta
+from app.config.settings import SECRET_KEY, BCRYPT_SALT
+from app.config.database import database
+import bcrypt
+import logging
+from app.schemas.user import UserCreate, UserLogin
+from app.models.users.user import create_user, get_user_by_email  # อธิบาย: นำเข้าฟังก์ชันจาก model
+
+# ตั้งค่า logging สำหรับบันทึกการทำงานและ debug
+# อธิบาย: ใช้ logging เพื่อ track การสมัคร, login, และ error
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# สร้าง router สำหรับ endpoint ภายใต้ /auth
+# อธิบาย: prefix="/auth" ทำให้ endpoint เริ่มด้วย /auth เช่น /auth/register
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+# กำหนด algorithm สำหรับ JWT
+# อธิบาย: HS256 เป็น standard algorithm สำหรับ JWT ใช้ HMAC-SHA256
+ALGORITHM = "HS256"
+
+# ฟังก์ชันสร้าง JWT access token
+def create_access_token(data: dict):
+    # อธิบาย: สร้าง JWT จากข้อมูล (user_id ใน sub และ role)
+    # เพิ่ม expiration time และ encode ด้วย SECRET_KEY
+    try:
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(days=1)  # กำหนดเวลา expiration เป็น 1 วัน
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        logger.info(f"Created JWT for user: id={data.get('sub')}, role={data.get('role')}")
+        return encoded_jwt
+    except Exception as e:
+        logger.error(f"Error creating JWT: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create token")
+
+# Endpoint สำหรับสมัครสมาชิก
+@router.post("/register")
+async def register(user: UserCreate):
+    # อธิบาย: รับ UserCreate schema (name, email, password, role)
+    # ใช้ create_user จาก model ซึ่งตรวจสอบ email ซ้ำและตั้ง role='admin' โดย default
+    try:
+        result = await create_user(user)
+        if not result:
+            logger.warning(f"Registration failed: Email {user.email} already exists")
+            raise HTTPException(status_code=400, detail="Email already exists")
+        logger.info(f"User registered: {user.email}, role={result.role}")
+        return {"message": "User created"}
+    except ValueError as e:
+        logger.error(f"Error creating user: {str(e)}")
+        raise HTTPException(status_code=500, detail="Invalid BCRYPT_SALT")
+
+# Endpoint สำหรับ login
+@router.post("/login")
+async def login(user: UserLogin):
+    # อธิบาย: รับ UserLogin schema (email, password)
+    # ใช้ get_user_by_email จาก model เพื่อตรวจสอบผู้ใช้
+    db_user = await get_user_by_email(user.email)
+    if not db_user:
+        logger.warning(f"Login attempt with invalid email: {user.email}")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    logger.info(f"Found user: id={db_user['id']}, email={db_user['email']}, role={db_user['role']}")
+    try:
+        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+        if hashed_password != db_user["password"]:
+            logger.warning(f"Invalid password for email: {user.email}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+    except ValueError as e:
+        logger.error(f"Error verifying password for {user.email}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Invalid BCRYPT_SALT")
+    token = create_access_token({"sub": str(db_user["id"]), "role": db_user["role"]})
+    logger.info(f"User logged in: {user.email}, token sub={db_user['id']}, role={db_user['role']}")
+    return {"access_token": token, "token_type": "bearer"}
+
+
+ผมต้องการให้เเก้ใขระบบใหม่โดยใช้เค้าโครง code เดิม
+1. role จะมี 
+system_admin เข้าถึง crud ข้อมูลประเภท type เช่น role type party type
+account_admin เข้าถึง crud user ทั้งหมด ในระบบ สามารถเปลี่ยน name username password ของทุกคนในระบบได้หมด
+hr_admin เข้าถึง crud เกี่ยวกับกับ person
+organization_admin เข้าถึง crud เกี่ยวกับ organization
+person_user สามารถ crud บทบาทตัวเอง การติดต่อสื่อสารกับบุคคลหรือองค์กรได้
+organization_user สามารถ crud บทบาทตัวเอง การต่อสื่อสารกับบุคคลหรือองค์กรได้
+
+สิ่งที่เเต่ละ role ทำได้ เเค่เขียนเป็น comment ไว้ในนั้นพอนะ ผมเเค่บอกเป็นข้อมูล
+
+2. มี api part สำหรับ register account_admin 
+3. มีการเก็บ timestamp create_at update_at ไว้ด้วย
+4. เขียน sql สำหรับการ create table user ให้ด้วย
+5. ที่ backend มีการ check ด้วยว่า email ที่ใส่เข้ามามันเป็น email จริงมั้ง
+
+-------------------------------------------------------------------------------
+
+<xaiArtifact artifact_id="02e0c1c3-8f05-46cd-a000-503e5a6363f6" artifact_version_id="58cd4003-4cc6-4f3c-8b10-f687dc1b8c66" title="main.py" contentType="text/python">
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.config.database import database
+from app.controllers.auth.auth import router as auth_router
+from app.controllers.users.user import router as user_router
+
+load_dotenv()
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router)
+app.include_router(user_router)
+
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
+
+@app.get("/")
+async def root():
+    return {"message": "FastAPI Backend", "github": "https://github.com/ssszZ-TH/party_fullstack_docker4"}
+</xaiArtifact>
+
+<xaiArtifact artifact_id="31830e4c-447a-4743-9460-7f888b3c56e1" artifact_version_id="28da1d04-ae96-434a-ae79-a06713eccd3a" title="schemas/user.py" contentType="text/python">
+from pydantic import BaseModel, EmailStr
+from typing import Optional
+from datetime import datetime
+
+class UserCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    role: Optional[str] = None
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    password: Optional[str] = None
+    role: Optional[str] = None
+
+class UserOut(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    role: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class AccountAdminCreate(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+</xaiArtifact>
+
+<xaiArtifact artifact_id="5c96eced-5afc-4323-b78f-a91eab61fd7c" artifact_version_id="a4d13e6e-fe23-4c78-95e5-9def7dab2103" title="models/users/user.py" contentType="text/python">
+from app.config.database import database
+from app.config.settings import BCRYPT_SALT
+from app.schemas.user import UserCreate, UserUpdate, UserOut, AccountAdminCreate
+import bcrypt
+import logging
+from typing import Optional, List
+from datetime import datetime
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Role permissions:
+# system_admin: CRUD role types, party types
+# account_admin: CRUD all users, modify name/username/password for any user
+# hr_admin: CRUD person-related data
+# organization_admin: CRUD organization-related data
+# person_user: CRUD own data, communicate with persons/organizations
+# organization_user: CRUD own data, communicate with persons/organizations
+
+async def get_user_by_email(email: str) -> Optional[dict]:
+    query = "SELECT id, name, email, password, role, created_at, updated_at FROM users WHERE email = :email"
+    result = await database.fetch_one(query=query, values={"email": email})
+    logger.info(f"Queried user with email {email}: {result}")
+    return result
+
+async def create_user(user: UserCreate) -> Optional[UserOut]:
+    try:
+        existing_user = await get_user_by_email(user.email)
+        if existing_user:
+            logger.warning(f"Attempt to create user with existing email: {user.email}")
+            return None
+        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+        now = datetime.utcnow()
+        query = """
+            INSERT INTO users (name, email, password, role, created_at, updated_at)
+            VALUES (:name, :email, :password, :role, :created_at, :updated_at)
+            RETURNING id, name, email, role, created_at, updated_at
+        """
+        values = {
+            "name": user.name,
+            "email": user.email,
+            "password": hashed_password,
+            "role": user.role or "person_user",
+            "created_at": now,
+            "updated_at": now
+        }
+        result = await database.fetch_one(query=query, values=values)
+        logger.info(f"Created user: {user.email}, role: {user.role}")
+        return UserOut(**result._mapping) if result else None
+    except ValueError as e:
+        logger.error(f"Error hashing password for {user.email}: {str(e)}")
+        raise
+
+async def create_account_admin(user: AccountAdminCreate) -> Optional[UserOut]:
+    try:
+        existing_user = await get_user_by_email(user.email)
+        if existing_user:
+            logger.warning(f"Attempt to create account admin with existing email: {user.email}")
+            return None
+        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+        now = datetime.utcnow()
+        query = """
+            INSERT INTO users (name, email, password, role, created_at, updated_at)
+            VALUES (:name, :email, :password, :role, :created_at, :updated_at)
+            RETURNING id, name, email, role, created_at, updated_at
+        """
+        values = {
+            "name": user.name,
+            "email": user.email,
+            "password": hashed_password,
+            "role": "account_admin",
+            "created_at": now,
+            "updated_at": now
+        }
+        result = await database.fetch_one(query=query, values=values)
+        logger.info(f"Created account admin: {user.email}")
+        return UserOut(**result._mapping) if result else None
+    except ValueError as e:
+        logger.error(f"Error hashing password for {user.email}: {str(e)}")
+        raise
+
+async def get_user(user_id: int) -> Optional[UserOut]:
+    query = "SELECT id, name, email, role, created_at, updated_at FROM users WHERE id = :id"
+    result = await database.fetch_one(query=query, values={"id": user_id})
+    logger.info(f"Retrieved user: id={user_id}")
+    return UserOut(**result._mapping) if result else None
+
+async def get_all_users() -> List[UserOut]:
+    query = "SELECT id, name, email, role, created_at, updated_at FROM users ORDER BY id ASC"
+    results = await database.fetch_all(query=query)
+    logger.info(f"Retrieved {len(results)} users")
+    return [UserOut(**result._mapping) for result in results]
+
+async def update_user(user_id: int, user: UserUpdate) -> Optional[UserOut]:
+    values = {"id": user_id, "updated_at": datetime.utcnow()}
+    query_parts = []
+    
+    if user.name is not None:
+        query_parts.append("name = :name")
+        values["name"] = user.name
+    if user.email is not None:
+        query_parts.append("email = :email")
+        values["email"] = user.email
+    if user.password is not None:
+        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+        query_parts.append("password = :password")
+        values["password"] = hashed_password
+    if user.role is not None:
+        query_parts.append("role = :role")
+        values["role"] = user.role
+
+    if not query_parts:
+        logger.info(f"No fields to update for user id={user_id}")
+        return None
+
+    query = f"""
+        UPDATE users
+        SET {', '.join(query_parts)}, updated_at = :updated_at
+        WHERE id = :id
+        RETURNING id, name, email, role, created_at, updated_at
+    """
+    result = await database.fetch_one(query=query, values=values)
+    logger.info(f"Updated user: id={user_id}")
+    return UserOut(**result._mapping) if result else None
+
+async def delete_user(user_id: int) -> Optional[int]:
+    query = "DELETE FROM users WHERE id = :id RETURNING id"
+    result = await database.fetch_one(query=query, values={"id": user_id})
+    logger.info(f"Deleted user: id={user_id}")
+    return result["id"] if result else None
+
+async def verify_user_password(user_id: int, password: str) -> bool:
+    query = "SELECT password FROM users WHERE id = :id"
+    result = await database.fetch_one(query=query, values={"id": user_id})
+    if not result:
+        logger.warning(f"User not found for password verification: id={user_id}")
+        return False
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+    logger.info(f"Verified password for user id={user_id}")
+    return hashed_password == result["password"]
+</xaiArtifact>
+
+<xaiArtifact artifact_id="7fd4c493-707c-4849-9e7c-4d189577ce9c" artifact_version_id="1cd6202a-3d12-4ee5-8e87-774d89f10e42" title="controllers/users/user.py" contentType="text/python">
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
+from typing import List
+import logging
+from app.models.users.user import create_user, get_user, update_user, delete_user, get_all_users, create_account_admin
+from app.schemas.user import UserCreate, UserUpdate, UserOut, AccountAdminCreate
+from app.config.settings import SECRET_KEY
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        logger.info(f"Decoded JWT payload: {payload}")
+        user_id: str = payload.get("sub")
+        role: str = payload.get("role")
+        if user_id is None or role not in ["system_admin", "account_admin"]:
+            logger.error(f"Invalid token: missing 'sub' or role is not authorized (role={role})")
+            raise HTTPException(status_code=401, detail="Admin access required")
+        logger.info(f"Authenticated user: id={user_id}, role={role}")
+        return {"id": user_id, "role": role}
+    except JWTError as e:
+        logger.error(f"JWT decode failed: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+@router.post("/", response_model=UserOut)
+async def create_user_endpoint(user: UserCreate, current_user: dict = Depends(get_current_user)):
+    result = await create_user(user)
+    if not result:
+        logger.warning(f"Failed to create user: {user.email}")
+        raise HTTPException(status_code=400, detail="Email already exists")
+    logger.info(f"Created user: {user.email}, role={result.role}")
+    return result
+
+@router.post("/account-admin", response_model=UserOut)
+async def create_account_admin_endpoint(user: AccountAdminCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "system_admin":
+        logger.warning(f"Unauthorized attempt to create account admin by user: id={current_user['id']}")
+        raise HTTPException(status_code=403, detail="System admin access required")
+    result = await create_account_admin(user)
+    if not result:
+        logger.warning(f"Failed to create account admin: {user.email}")
+        raise HTTPException(status_code=400, detail="Email already exists")
+    logger.info(f"Created account admin: {user.email}")
+    return result
+
+@router.get("/me", response_model=UserOut)
+async def get_current_user_endpoint(current_user: dict = Depends(get_current_user)):
+    user_id = int(current_user["id"])
+    result = await get_user(user_id)
+    if not result:
+        logger.warning(f"User not found: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Retrieved current user: id={user_id}, role={result.role}")
+    return result
+
+@router.get("/{user_id}", response_model=UserOut)
+async def get_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)):
+    result = await get_user(user_id)
+    if not result:
+        logger.warning(f"User not found: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Retrieved user: id={user_id}, role={result.role}")
+    return result
+
+@router.get("/", response_model=List[UserOut])
+async def get_all_users_endpoint(current_user: dict = Depends(get_current_user)):
+    results = await get_all_users()
+    logger.info(f"Retrieved {len(results)} users")
+    return results
+
+@router.put("/{user_id}", response_model=UserOut)
+async def update_user_endpoint(user_id: int, user: UserUpdate, current_user: dict = Depends(get_current_user)):
+    result = await update_user(user_id, user)
+    if not result:
+        logger.warning(f"User not found for update: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Updated user: id={user_id}, role={result.role}")
+    return result
+
+@router.delete("/{user_id}")
+async def delete_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)):
+    result = await delete_user(user_id)
+    if not result:
+        logger.warning(f"User not found for deletion: id={user_id}")
+        raise HTTPException(status_code=404, detail="User not found")
+    logger.info(f"Deleted user: id={user_id}")
+    return {"message": "User deleted"}
+</xaiArtifact>
+
+<xaiArtifact artifact_id="6b68a75b-6a7c-4e66-a3f2-33f883ec0396" artifact_version_id="ffe63df4-a6a0-4d1b-bfcc-9735f0d2e5fb" title="controllers/auth/auth.py" contentType="text/python">
+from fastapi import APIRouter, HTTPException
+from jose import jwt, JWTError
+from datetime import datetime, timedelta
+from app.config.settings import SECRET_KEY, BCRYPT_SALT
+from app.config.database import database
+import bcrypt
+import logging
+from app.schemas.user import UserCreate, UserLogin
+from app.models.users.user import create_user, get_user_by_email
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+ALGORITHM = "HS256"
+
+def create_access_token(data: dict):
+    try:
+        to_encode = data.copy()
+        expire = datetime.utcnow() + timedelta(days=1)
+        to_encode.update({"exp": expire})
+        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        logger.info(f"Created JWT for user: id={data.get('sub')}, role={data.get('role')}")
+        return encoded_jwt
+    except Exception as e:
+        logger.error(f"Error creating JWT: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create token")
+
+@router.post("/register")
+async def register(user: UserCreate):
+    try:
+        result = await create_user(user)
+        if not result:
+            logger.warning(f"Registration failed: Email {user.email} already exists")
+            raise HTTPException(status_code=400, detail="Email already exists")
+        logger.info(f"User registered: {user.email}, role={result.role}")
+        return {"message": "User created"}
+    except ValueError as e:
+        logger.error(f"Error creating user: {str(e)}")
+        raise HTTPException(status_code=500, detail="Invalid BCRYPT_SALT")
+
+@router.post("/login")
+async def login(user: UserLogin):
+    db_user = await get_user_by_email(user.email)
+    if not db_user:
+        logger.warning(f"Login attempt with invalid email: {user.email}")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    logger.info(f"Found user: id={db_user['id']}, email={db_user['email']}, role={db_user['role']}")
+    try:
+        hashed_password = bcrypt.hashpw(user.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+        if hashed_password != db_user["password"]:
+            logger.warning(f"Invalid password for email: {user.email}")
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+    except ValueError as e:
+        logger.error(f"Error verifying password for {user.email}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Invalid BCRYPT_SALT")
+    token = create_access_token({"sub": str(db_user["id"]), "role": db_user["role"]})
+    logger.info(f"User logged in: {user.email}, token sub={db_user['id']}, role={db_user['role']}")
+    return {"access_token": token, "token_type": "bearer"}
+</xaiArtifact>
+
+<xaiArtifact artifact_id="533d980a-104b-44a0-bd3a-d56dead62042" artifact_version_id="8c88f795-adff-4c79-80b6-91c0bfe5c8c3" title="create_users_table.sql" contentType="text/sql">
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    role VARCHAR(50) CHECK (role IN ('system_admin', 'account_admin', 'hr_admin', 'organization_admin', 'person_user', 'organization_user')),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+</xaiArtifact>

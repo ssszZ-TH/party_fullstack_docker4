@@ -1,18 +1,16 @@
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.config.database import database
 from app.controllers.auth.auth import router as auth_router
+from app.controllers.users.user import router as user_router
+from app.controllers.persons.person import router as person_router
+from app.controllers.organizations.organization import router as organization_router
 
-
-
-# โหลด .env ก่อน import อื่นๆ
 load_dotenv()
 
 app = FastAPI()
 
-# CORS สำหรับ frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -21,9 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# รวม routers
 app.include_router(auth_router)
-
+app.include_router(user_router)
+app.include_router(person_router)
+app.include_router(organization_router)
 
 @app.on_event("startup")
 async def startup():
@@ -35,4 +34,4 @@ async def shutdown():
 
 @app.get("/")
 async def root():
-    return {"message": "FastAPI Backend","github":"https://github.com/ssszZ-TH/party_fullstack_docker3"}
+    return {"message": "FastAPI Backend", "github": "https://github.com/ssszZ-TH/party_fullstack_docker4"}

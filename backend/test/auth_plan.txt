@@ -1,0 +1,138 @@
+# Test Plan for FastAPI Backend using Postman
+
+# 1. Login
+Method: POST
+Path: /auth/login
+Payload:
+{
+    "email": "test@example.com",
+    "password": "testpassword123"
+}
+Headers:
+- Content-Type: application/json
+Expected Response:
+- 200 OK: {"access_token": "<token>", "token_type": "bearer"}
+- 401 Unauthorized: {"detail": "Invalid credentials"} (if email/password wrong)
+Notes: Save the token for authenticated requests.
+
+# 2. Create Account Admin (requires system_admin token)
+Method: POST
+Path: /users/account-admin
+Payload:
+{
+    "name": "Test Admin",
+    "email": "admin@test.com",
+    "password": "adminpassword123"
+}
+Headers:
+- Content-Type: application/json
+- Authorization: Bearer <system_admin_token>
+Expected Response:
+- 200 OK: {"id": 1, "name": "Test Admin", "email": "admin@test.com", "role": "account_admin", "created_at": "...", "updated_at": "..."}
+- 400 Bad Request: {"detail": "Email already exists"}
+- 403 Forbidden: {"detail": "System admin access required"} (if not system_admin)
+Notes: Only system_admin can create account_admin.
+
+# 3. Create User (requires account_admin token)
+Method: POST
+Path: /users/
+Payload:
+{
+    "name": "Test User",
+    "email": "user@test.com",
+    "password": "userpassword123",
+    "role": "person_user"
+}
+Headers:
+- Content-Type: application/json
+- Authorization: Bearer <account_admin_token>
+Expected Response:
+- 200 OK: {"id": 2, "name": "Test User", "email": "user@test.com", "role": "person_user", "created_at": "...", "updated_at": "..."}
+- 400 Bad Request: {"detail": "Email already exists"}
+- 403 Forbidden: {"detail": "Account admin access required"} (if not account_admin)
+Notes: Only account_admin can create users.
+
+# 4. Get Current User (requires any valid token)
+Method: GET
+Path: /users/me
+Payload: None
+Headers:
+- Authorization: Bearer <any_token>
+Expected Response:
+- 200 OK: {"id": 1, "name": "Test User", "email": "user@test.com", "role": "<role>", "created_at": "...", "updated_at": "..."}
+- 401 Unauthorized: {"detail": "Invalid token"} (if token invalid)
+- 404 Not Found: {"detail": "User not found"} (if user deleted)
+Notes: All roles can access their own data.
+
+# 5. Get User by ID (requires system_admin or account_admin token)
+Method: GET
+Path: /users/{user_id}
+Payload: None
+Headers:
+- Authorization: Bearer <admin_token>
+Expected Response:
+- 200 OK: {"id": 1, "name": "Test User", "email": "user@test.com", "role": "<role>", "created_at": "...", "updated_at": "..."}
+- 403 Forbidden: {"detail": "Admin access required"} (if not admin)
+- 404 Not Found: {"detail": "User not found"}
+Notes: Only system_admin and account_admin can access.
+
+# 6. Get All Users (requires system_admin or account_admin token)
+Method: GET
+Path: /users/
+Payload: None
+Headers:
+- Authorization: Bearer <admin_token>
+Expected Response:
+- 200 OK: [{"id": 1, "name": "...", "email": "...", "role": "...", "created_at": "...", "updated_at": "..."}, ...]
+- 403 Forbidden: {"detail": "Admin access required"} (if not admin)
+Notes: Only system_admin and account_admin can list all users.
+
+# 7. Update Current User (requires any valid token)
+Method: PUT
+Path: /users/me
+Payload:
+{
+    "name": "Updated Name",
+    "email": "updated@test.com",
+    "password": "newpassword123"
+}
+Headers:
+- Content-Type: application/json
+- Authorization: Bearer <any_token>
+Expected Response:
+- 200 OK: {"id": 1, "name": "Updated Name", "email": "updated@test.com", "role": "<role>", "created_at": "...", "updated_at": "..."}
+- 403 Forbidden: {"detail": "Cannot update role"} (if role included in payload)
+- 404 Not Found: {"detail": "User not found"}
+Notes: All roles can update their own name, email, password. Role cannot be updated.
+
+# 8. Delete User (requires account_admin token)
+Method: DELETE
+Path: /users/{user_id}
+Payload: None
+Headers:
+- Authorization: Bearer <account_admin_token>
+Expected Response:
+- 200 OK: {"message": "User deleted"}
+- 403 Forbidden: {"detail": "Account admin access required"} (if not account_admin)
+- 404 Not Found: {"detail": "User not found"}
+Notes: Only account_admin can delete users.
+
+# Test Flow:
+1. Create a system_admin user directly in DB (since no register endpoint).
+2. Login as system_admin to get token.
+3. Use system_admin token to create account_admin.
+4. Login as account_admin to get token.
+5. Use account_admin token to create other users (e.g., person_user, organization_user).
+6. Test /users/me with different role tokens.
+7. Test /users/ and /users/{id} with system_admin and account_admin tokens.
+8. Test /users/me with non-admin tokens (should work).
+9. Test /users/ and /users/{id} with non-admin tokens (should fail with 403).
+10. Update user data via /users/me for various roles.
+11. Delete users using account_admin token.
+12. Test edge cases: duplicate emails, invalid tokens, non-existent users.
+
+# Notes:
+- Use Postman environment variables for tokens and user IDs.
+- Test with invalid payloads (e.g., invalid email format) to verify validation.
+- Verify timestamps (created_at, updated_at) in responses.
+- Ensure role-based access control is enforced correctly.
