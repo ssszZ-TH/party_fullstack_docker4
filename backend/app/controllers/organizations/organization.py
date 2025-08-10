@@ -75,12 +75,12 @@ async def get_current_organization_endpoint(current: dict = Depends(get_current_
     return result
 
 # Get organization by ID
-# Role: organization_user (own data only)
+# Role: organization_admin
 @router.get("/{organization_id}", response_model=OrganizationOut)
-async def get_organization_endpoint(organization_id: int, current: dict = Depends(get_current_organization)):
-    if int(current["id"]) != organization_id:
-        logger.warning(f"Unauthorized attempt to get organization by id={organization_id} by organization: id={current['id']}")
-        raise HTTPException(status_code=403, detail="Access to this organization not allowed")
+async def get_organization_endpoint(organization_id: int, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "organization_admin":
+        logger.warning(f"Unauthorized attempt to get organization by id={organization_id} by user: id={current_user['id']}, role={current_user['role']}")
+        raise HTTPException(status_code=403, detail="Organization admin access required")
     result = await get_organization(organization_id)
     if not result:
         logger.warning(f"Organization not found: id={organization_id}")

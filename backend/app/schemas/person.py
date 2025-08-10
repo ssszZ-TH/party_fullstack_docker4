@@ -12,13 +12,13 @@ class PersonCreate(BaseModel):
     last_name: str
     nick_name: Optional[str] = None
     birth_date: date
-    gender_type_id: int
-    marital_status_type_id: int
-    country_id: int
+    gender_type_id: Optional[int] = None
+    marital_status_type_id: Optional[int] = None
+    country_id: Optional[int] = None
     height: int
     weight: int
-    ethnicity_type_id: int
-    income_range_id: int
+    ethnicity_type_id: Optional[int] = None
+    income_range_id: Optional[int] = None
     comment: Optional[str] = None
 
 # Schema for updating person
@@ -50,13 +50,13 @@ class PersonOut(BaseModel):
     last_name: str
     nick_name: Optional[str] = None
     birth_date: date
-    gender_type_id: int
-    marital_status_type_id: int
-    country_id: int
+    gender_type_id: Optional[int] = None
+    marital_status_type_id: Optional[int] = None
+    country_id: Optional[int] = None
     height: int
     weight: int
-    ethnicity_type_id: int
-    income_range_id: int
+    ethnicity_type_id: Optional[int] = None
+    income_range_id: Optional[int] = None
     comment: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

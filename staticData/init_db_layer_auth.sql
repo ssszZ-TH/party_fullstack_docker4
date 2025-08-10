@@ -1,6 +1,8 @@
--- Drop tables if they exist
+-- Drop tables if they exist to ensure clean schema creation
 DROP TABLE IF EXISTS person_history;
 DROP TABLE IF EXISTS organization_history;
+DROP TABLE IF EXISTS passport_history;
+DROP TABLE IF EXISTS passports;
 DROP TABLE IF EXISTS persons;
 DROP TABLE IF EXISTS organizations;
 DROP TABLE IF EXISTS users;
@@ -10,6 +12,8 @@ DROP TABLE IF EXISTS countries;
 DROP TABLE IF EXISTS ethnicity_types;
 DROP TABLE IF EXISTS income_ranges;
 DROP TABLE IF EXISTS organization_types;
+DROP TABLE IF EXISTS industry_types;
+DROP TABLE IF EXISTS employee_count_ranges;
 
 -- Create users table with updated role check
 CREATE TABLE users (
@@ -60,7 +64,20 @@ CREATE TABLE organization_types (
     description VARCHAR(100) NOT NULL
 );
 
--- Create persons table
+-- Create industry_types table
+CREATE TABLE industry_types (
+    id SERIAL PRIMARY KEY,
+    naisc VARCHAR(10) NOT NULL,
+    description VARCHAR(255) NOT NULL
+);
+
+-- Create employee_count_ranges table
+CREATE TABLE employee_count_ranges (
+    id SERIAL PRIMARY KEY,
+    description VARCHAR(100) NOT NULL
+);
+
+-- Create persons table with nullable foreign keys
 CREATE TABLE persons (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
@@ -71,13 +88,13 @@ CREATE TABLE persons (
     last_name VARCHAR(255) NOT NULL,
     nick_name VARCHAR(255),
     birth_date DATE NOT NULL,
-    gender_type_id INT REFERENCES gender_types(id),
-    marital_status_type_id INT REFERENCES marital_status_types(id),
-    country_id INT REFERENCES countries(id),
+    gender_type_id INT REFERENCES gender_types(id) ON DELETE SET NULL,
+    marital_status_type_id INT REFERENCES marital_status_types(id) ON DELETE SET NULL,
+    country_id INT REFERENCES countries(id) ON DELETE SET NULL,
     height INT NOT NULL,
     weight INT NOT NULL,
-    ethnicity_type_id INT REFERENCES ethnicity_types(id),
-    income_range_id INT REFERENCES income_ranges(id),
+    ethnicity_type_id INT REFERENCES ethnicity_types(id) ON DELETE SET NULL,
+    income_range_id INT REFERENCES income_ranges(id) ON DELETE SET NULL,
     comment TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
@@ -107,20 +124,46 @@ CREATE TABLE person_history (
     action_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create organizations table with username and password
+-- Create passports table
+CREATE TABLE passports (
+    id SERIAL PRIMARY KEY,
+    passport_id_number VARCHAR(50) UNIQUE NOT NULL,
+    issue_date DATE NOT NULL,
+    expire_date DATE NOT NULL,
+    person_id INT REFERENCES persons(id) ON DELETE SET NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
+);
+
+-- Create passport_history table
+CREATE TABLE passport_history (
+    id SERIAL PRIMARY KEY,
+    passport_id INT REFERENCES passports(id) ON DELETE SET NULL,
+    passport_id_number VARCHAR(50),
+    issue_date DATE,
+    expire_date DATE,
+    person_id INT,
+    action VARCHAR(50) NOT NULL,
+    action_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create organizations table with nullable foreign keys and additional columns
 CREATE TABLE organizations (
     id SERIAL PRIMARY KEY,
     federal_tax_id VARCHAR(50),
     name_en VARCHAR(255) NOT NULL,
     name_th VARCHAR(255),
-    organization_type_id INT REFERENCES organization_types(id),
+    organization_type_id INT REFERENCES organization_types(id) ON DELETE SET NULL,
+    industry_type_id INT REFERENCES industry_types(id) ON DELETE SET NULL,
+    employee_count_range_id INT REFERENCES employee_count_ranges(id) ON DELETE SET NULL,
     username VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
+    comment TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
 );
 
--- Create organization_history table with username and password
+-- Create organization_history table with additional columns
 CREATE TABLE organization_history (
     id SERIAL PRIMARY KEY,
     organization_id INT REFERENCES organizations(id) ON DELETE SET NULL,
@@ -128,8 +171,11 @@ CREATE TABLE organization_history (
     name_en VARCHAR(255),
     name_th VARCHAR(255),
     organization_type_id INT,
+    industry_type_id INT,
+    employee_count_range_id INT,
     username VARCHAR(255),
     password VARCHAR(255),
+    comment TEXT,
     action VARCHAR(50) NOT NULL,
     action_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

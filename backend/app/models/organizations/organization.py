@@ -14,9 +14,16 @@ logger = logging.getLogger(__name__)
 async def create_organization(organization: OrganizationCreate) -> Optional[OrganizationOut]:
     try:
         query = """
-            INSERT INTO organizations (federal_tax_id, name_en, name_th, organization_type_id, username, password, created_at)
-            VALUES (:federal_tax_id, :name_en, :name_th, :organization_type_id, :username, :password, :created_at)
-            RETURNING id, federal_tax_id, name_en, name_th, organization_type_id, username, created_at, updated_at
+            INSERT INTO organizations (
+                federal_tax_id, name_en, name_th, organization_type_id, industry_type_id, 
+                employee_count_range_id, username, password, comment, created_at
+            )
+            VALUES (
+                :federal_tax_id, :name_en, :name_th, :organization_type_id, :industry_type_id, 
+                :employee_count_range_id, :username, :password, :comment, :created_at
+            )
+            RETURNING id, federal_tax_id, name_en, name_th, organization_type_id, industry_type_id, 
+                      employee_count_range_id, username, comment, created_at, updated_at
         """
         hashed_password = bcrypt.hashpw(organization.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
         now = datetime.utcnow()
@@ -25,8 +32,11 @@ async def create_organization(organization: OrganizationCreate) -> Optional[Orga
             "name_en": organization.name_en,
             "name_th": organization.name_th,
             "organization_type_id": organization.organization_type_id,
+            "industry_type_id": organization.industry_type_id,
+            "employee_count_range_id": organization.employee_count_range_id,
             "username": organization.username,
             "password": hashed_password,
+            "comment": organization.comment,
             "created_at": now
         }
         result = await database.fetch_one(query=query, values=values)
@@ -39,10 +49,11 @@ async def create_organization(organization: OrganizationCreate) -> Optional[Orga
         raise
 
 # Get organization by ID
-# Role: organization_user (own data), organization_admin
+# Role: organization_admin
 async def get_organization(organization_id: int) -> Optional[OrganizationOut]:
     query = """
-        SELECT id, federal_tax_id, name_en, name_th, organization_type_id, username, created_at, updated_at 
+        SELECT id, federal_tax_id, name_en, name_th, organization_type_id, industry_type_id, 
+               employee_count_range_id, username, comment, created_at, updated_at 
         FROM organizations WHERE id = :id
     """
     result = await database.fetch_one(query=query, values={"id": organization_id})
@@ -53,7 +64,8 @@ async def get_organization(organization_id: int) -> Optional[OrganizationOut]:
 # Role: organization_admin
 async def get_all_organizations() -> List[OrganizationOut]:
     query = """
-        SELECT id, federal_tax_id, name_en, name_th, organization_type_id, username, created_at, updated_at 
+        SELECT id, federal_tax_id, name_en, name_th, organization_type_id, industry_type_id, 
+               employee_count_range_id, username, comment, created_at, updated_at 
         FROM organizations ORDER BY id ASC
     """
     results = await database.fetch_all(query=query)
@@ -78,6 +90,12 @@ async def update_organization(organization_id: int, organization: OrganizationUp
     if organization.organization_type_id is not None:
         query_parts.append("organization_type_id = :organization_type_id")
         values["organization_type_id"] = organization.organization_type_id
+    if organization.industry_type_id is not None:
+        query_parts.append("industry_type_id = :industry_type_id")
+        values["industry_type_id"] = organization.industry_type_id
+    if organization.employee_count_range_id is not None:
+        query_parts.append("employee_count_range_id = :employee_count_range_id")
+        values["employee_count_range_id"] = organization.employee_count_range_id
     if organization.username is not None:
         query_parts.append("username = :username")
         values["username"] = organization.username
@@ -85,6 +103,9 @@ async def update_organization(organization_id: int, organization: OrganizationUp
         hashed_password = bcrypt.hashpw(organization.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
         query_parts.append("password = :password")
         values["password"] = hashed_password
+    if organization.comment is not None:
+        query_parts.append("comment = :comment")
+        values["comment"] = organization.comment
 
     if not query_parts:
         logger.info(f"No fields to update for organization id={organization_id}")
@@ -94,7 +115,8 @@ async def update_organization(organization_id: int, organization: OrganizationUp
         UPDATE organizations
         SET {', '.join(query_parts)}, updated_at = :updated_at
         WHERE id = :id
-        RETURNING id, federal_tax_id, name_en, name_th, organization_type_id, username, created_at, updated_at
+        RETURNING id, federal_tax_id, name_en, name_th, organization_type_id, industry_type_id, 
+                  employee_count_range_id, username, comment, created_at, updated_at
     """
     result = await database.fetch_one(query=query, values=values)
     if result:
@@ -117,9 +139,13 @@ async def delete_organization(organization_id: int) -> Optional[int]:
 async def log_organization_history(organization_id: int, data: dict, action: str):
     query = """
         INSERT INTO organization_history (
-            organization_id, federal_tax_id, name_en, name_th, organization_type_id, username, password, action, action_at
+            organization_id, federal_tax_id, name_en, name_th, organization_type_id, 
+            industry_type_id, employee_count_range_id, username, password, comment, action, action_at
         )
-        VALUES (:organization_id, :federal_tax_id, :name_en, :name_th, :organization_type_id, :username, :password, :action, :action_at)
+        VALUES (
+            :organization_id, :federal_tax_id, :name_en, :name_th, :organization_type_id, 
+            :industry_type_id, :employee_count_range_id, :username, :password, :comment, :action, :action_at
+        )
     """
     values = {
         "organization_id": organization_id,
@@ -127,8 +153,11 @@ async def log_organization_history(organization_id: int, data: dict, action: str
         "name_en": data.get("name_en"),
         "name_th": data.get("name_th"),
         "organization_type_id": data.get("organization_type_id"),
+        "industry_type_id": data.get("industry_type_id"),
+        "employee_count_range_id": data.get("employee_count_range_id"),
         "username": data.get("username"),
         "password": data.get("password"),
+        "comment": data.get("comment"),
         "action": action,
         "action_at": datetime.utcnow()
     }
