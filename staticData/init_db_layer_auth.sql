@@ -1,3 +1,4 @@
+-- Drop tables if they exist
 DROP TABLE IF EXISTS person_history;
 DROP TABLE IF EXISTS organization_history;
 DROP TABLE IF EXISTS persons;
@@ -10,26 +11,30 @@ DROP TABLE IF EXISTS ethnicity_types;
 DROP TABLE IF EXISTS income_ranges;
 DROP TABLE IF EXISTS organization_types;
 
+-- Create users table with updated role check
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password VARCHAR(255) NOT NULL,
-    role VARCHAR(50) CHECK (role IN ('system_admin', 'basetype_admin', 'hr_admin', 'organization_admin')),
+    role VARCHAR(50) CHECK (role IN ('system_admin', 'basetype_admin', 'hr_admin', 'organization_admin', 'organization_user', 'person_user')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
 );
 
+-- Create gender_types table
 CREATE TABLE gender_types (
     id SERIAL PRIMARY KEY,
     description VARCHAR(100) NOT NULL
 );
 
+-- Create marital_status_types table
 CREATE TABLE marital_status_types (
     id SERIAL PRIMARY KEY,
     description VARCHAR(100) NOT NULL
 );
 
+-- Create countries table
 CREATE TABLE countries (
     id SERIAL PRIMARY KEY,
     iso_code VARCHAR(3) NOT NULL,
@@ -37,21 +42,25 @@ CREATE TABLE countries (
     name_th VARCHAR(100)
 );
 
+-- Create ethnicity_types table
 CREATE TABLE ethnicity_types (
     id SERIAL PRIMARY KEY,
     description VARCHAR(100) NOT NULL
 );
 
+-- Create income_ranges table
 CREATE TABLE income_ranges (
     id SERIAL PRIMARY KEY,
     description VARCHAR(100) NOT NULL
 );
 
+-- Create organization_types table
 CREATE TABLE organization_types (
     id SERIAL PRIMARY KEY,
     description VARCHAR(100) NOT NULL
 );
 
+-- Create persons table
 CREATE TABLE persons (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,
@@ -74,6 +83,7 @@ CREATE TABLE persons (
     updated_at TIMESTAMP
 );
 
+-- Create person_history table
 CREATE TABLE person_history (
     id SERIAL PRIMARY KEY,
     person_id INT REFERENCES persons(id) ON DELETE SET NULL,
@@ -97,16 +107,20 @@ CREATE TABLE person_history (
     action_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create organizations table with username and password
 CREATE TABLE organizations (
     id SERIAL PRIMARY KEY,
     federal_tax_id VARCHAR(50),
     name_en VARCHAR(255) NOT NULL,
     name_th VARCHAR(255),
     organization_type_id INT REFERENCES organization_types(id),
+    username VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP
 );
 
+-- Create organization_history table with username and password
 CREATE TABLE organization_history (
     id SERIAL PRIMARY KEY,
     organization_id INT REFERENCES organizations(id) ON DELETE SET NULL,
@@ -114,6 +128,8 @@ CREATE TABLE organization_history (
     name_en VARCHAR(255),
     name_th VARCHAR(255),
     organization_type_id INT,
+    username VARCHAR(255),
+    password VARCHAR(255),
     action VARCHAR(50) NOT NULL,
     action_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

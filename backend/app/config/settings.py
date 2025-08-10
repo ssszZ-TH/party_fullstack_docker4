@@ -1,6 +1,7 @@
 # นำเข้าโมดูลที่จำเป็นสำหรับการตั้งค่าและ logging
 import re
 import logging
+from datetime import timedelta
 
 # ตั้งค่า logging สำหรับ debug และบันทึก error
 # อธิบาย: ใช้ logging เพื่อบันทึกการโหลด BCRYPT_SALT และ error
@@ -13,7 +14,9 @@ DATABASE_URL = "postgresql://spa:spa@db:5432/myapp"
 API_HOST = "0.0.0.0"
 API_PORT = 8080
 SECRET_KEY = "8c2f7a9b3d6e1f0c4a8b2d5e7f9a1c3b6d8e0f2a4b7c9d1e3f5a8b0c2d4e6f"
+ALGORITHM = "HS256"
 BCRYPT_SALT = "$2b$12$zDZMoHsxUdSvpuNJjEzsve"
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 1 day in minutes
 
 # ตรวจสอบ BCRYPT_SALT
 # อธิบาย: ตรวจสอบว่า BCRYPT_SALT ถูกตั้งค่าและอยู่ในรูปแบบที่ถูกต้อง

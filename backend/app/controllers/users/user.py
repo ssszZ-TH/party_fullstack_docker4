@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
-from typing import List
+from typing import List, Optional
+from datetime import datetime, timedelta
 import logging
 from app.models.users.user import create_user, get_user, update_user, delete_user, get_all_users
 from app.schemas.user import UserCreate, UserUpdate, UserOut
-from app.config.settings import SECRET_KEY
+from app.config.settings import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,9 +16,10 @@ router = APIRouter(prefix="/users", tags=["users"])  # Define user router
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")  # OAuth2 for token auth
 
 # Authenticate user from JWT token
+# Role: any
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         logger.info(f"Decoded JWT payload: {payload}")
         user_id: str = payload.get("sub")
         role: str = payload.get("role")
@@ -30,7 +32,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         logger.error(f"JWT decode failed: {str(e)}")
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# Create new user (system_admin only)
+# Create new user
+# Role: system_admin
 @router.post("/", response_model=UserOut)
 async def create_user_endpoint(user: UserCreate, current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "system_admin":
@@ -48,6 +51,7 @@ async def create_user_endpoint(user: UserCreate, current_user: dict = Depends(ge
     return result
 
 # Get current user data
+# Role: any
 @router.get("/me", response_model=UserOut)
 async def get_current_user_endpoint(current_user: dict = Depends(get_current_user)):
     user_id = int(current_user["id"])
@@ -58,7 +62,8 @@ async def get_current_user_endpoint(current_user: dict = Depends(get_current_use
     logger.info(f"Retrieved current user: id={user_id}, role={result.role}")
     return result
 
-# Get user by ID (system_admin only)
+# Get user by ID
+# Role: system_admin
 @router.get("/{user_id}", response_model=UserOut)
 async def get_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "system_admin":
@@ -71,7 +76,8 @@ async def get_user_endpoint(user_id: int, current_user: dict = Depends(get_curre
     logger.info(f"Retrieved user: id={user_id}, role={result.role}")
     return result
 
-# List all users (system_admin only)
+# List all users
+# Role: system_admin
 @router.get("/", response_model=List[UserOut])
 async def get_all_users_endpoint(current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "system_admin":
@@ -82,6 +88,7 @@ async def get_all_users_endpoint(current_user: dict = Depends(get_current_user))
     return results
 
 # Update current user data
+# Role: any
 @router.put("/me", response_model=UserOut)
 async def update_user_endpoint(user: UserUpdate, current_user: dict = Depends(get_current_user)):
     user_id = int(current_user["id"])
@@ -92,7 +99,8 @@ async def update_user_endpoint(user: UserUpdate, current_user: dict = Depends(ge
     logger.info(f"Updated user: id={user_id}, role={result.role}")
     return result
 
-# Update other user (system_admin only)
+# Update other user
+# Role: system_admin
 @router.put("/{user_id}", response_model=UserOut)
 async def update_other_user_endpoint(user_id: int, user: UserUpdate, current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "system_admin":
@@ -105,7 +113,8 @@ async def update_other_user_endpoint(user_id: int, user: UserUpdate, current_use
     logger.info(f"Updated user: id={user_id}, role={result.role}")
     return result
 
-# Delete current user (self-deletion for any role)
+# Delete current user
+# Role: any
 @router.delete("/me")
 async def delete_self_endpoint(current_user: dict = Depends(get_current_user)):
     user_id = int(current_user["id"])
@@ -116,7 +125,8 @@ async def delete_self_endpoint(current_user: dict = Depends(get_current_user)):
     logger.info(f"Self-deleted user: id={user_id}")
     return {"message": "User deleted"}
 
-# Delete user (system_admin only)
+# Delete user
+# Role: system_admin
 @router.delete("/{user_id}")
 async def delete_user_endpoint(user_id: int, current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "system_admin":
@@ -128,3 +138,15 @@ async def delete_user_endpoint(user_id: int, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=404, detail="User not found")
     logger.info(f"Deleted user: id={user_id}")
     return {"message": "User deleted"}
+
+# Create JWT access token with configurable expiration
+# Role: any (used internally)
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt

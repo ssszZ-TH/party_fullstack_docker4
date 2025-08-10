@@ -1,14 +1,16 @@
 from app.config.database import database
 from app.config.settings import BCRYPT_SALT
-from app.schemas.person import PersonCreate, PersonUpdate, PersonOut
 import bcrypt
 import logging
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.person import PersonCreate, PersonUpdate, PersonOut
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Create person with hashed password
+# Role: hr_admin
 async def create_person(person: PersonCreate) -> Optional[PersonOut]:
     try:
         query = """
@@ -52,10 +54,12 @@ async def create_person(person: PersonCreate) -> Optional[PersonOut]:
             await log_person_history(result["id"], values, "create")
         logger.info(f"Created person: {person.username}")
         return PersonOut(**result._mapping) if result else None
-    except ValueError as e:
+    except Exception as e:
         logger.error(f"Error creating person: {str(e)}")
         raise
 
+# Get person by ID
+# Role: hr_admin, person_user (own data only)
 async def get_person(person_id: int) -> Optional[PersonOut]:
     query = """
         SELECT id, username, personal_id_number, first_name, middle_name, last_name, 
@@ -67,6 +71,21 @@ async def get_person(person_id: int) -> Optional[PersonOut]:
     logger.info(f"Retrieved person: id={person_id}")
     return PersonOut(**result._mapping) if result else None
 
+# Get all persons
+# Role: hr_admin
+async def get_all_persons() -> List[PersonOut]:
+    query = """
+        SELECT id, username, personal_id_number, first_name, middle_name, last_name, 
+               nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
+               height, weight, ethnicity_type_id, income_range_id, comment, created_at, updated_at 
+        FROM persons ORDER BY id ASC
+    """
+    results = await database.fetch_all(query=query)
+    logger.info(f"Retrieved {len(results)} persons")
+    return [PersonOut(**result._mapping) for result in results]
+
+# Update person with optional fields
+# Role: hr_admin
 async def update_person(person_id: int, person: PersonUpdate) -> Optional[PersonOut]:
     values = {"id": person_id, "updated_at": datetime.utcnow()}
     query_parts = []
@@ -139,6 +158,8 @@ async def update_person(person_id: int, person: PersonUpdate) -> Optional[Person
     logger.info(f"Updated person: id={person_id}")
     return PersonOut(**result._mapping) if result else None
 
+# Delete person
+# Role: hr_admin
 async def delete_person(person_id: int) -> Optional[int]:
     query = "DELETE FROM persons WHERE id = :id RETURNING id"
     result = await database.fetch_one(query=query, values={"id": person_id})
@@ -147,6 +168,8 @@ async def delete_person(person_id: int) -> Optional[int]:
     logger.info(f"Deleted person: id={person_id}")
     return result["id"] if result else None
 
+# Log person history
+# Role: hr_admin
 async def log_person_history(person_id: int, data: dict, action: str):
     query = """
         INSERT INTO person_history (
@@ -183,3 +206,18 @@ async def log_person_history(person_id: int, data: dict, action: str):
     }
     await database.execute(query=query, values=values)
     logger.info(f"Logged person history: id={person_id}, action={action}")
+
+# Verify person credentials
+# Role: person_user
+async def verify_person_credentials(username: str, password: str) -> Optional[dict]:
+    query = "SELECT id, username, password FROM persons WHERE username = :username"
+    result = await database.fetch_one(query=query, values={"username": username})
+    if not result:
+        logger.warning(f"Person not found for username: {username}")
+        return None
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+    if hashed_password == result["password"]:
+        logger.info(f"Verified credentials for person: {username}")
+        return {"id": result["id"], "username": result["username"]}
+    logger.warning(f"Invalid password for person: {username}")
+    return None

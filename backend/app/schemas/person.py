@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, date
 
+# Schema for creating person
 class PersonCreate(BaseModel):
     username: str
     password: str
@@ -20,6 +21,7 @@ class PersonCreate(BaseModel):
     income_range_id: int
     comment: Optional[str] = None
 
+# Schema for updating person
 class PersonUpdate(BaseModel):
     username: Optional[str] = None
     password: Optional[str] = None
@@ -38,6 +40,7 @@ class PersonUpdate(BaseModel):
     income_range_id: Optional[int] = None
     comment: Optional[str] = None
 
+# Schema for person output
 class PersonOut(BaseModel):
     id: int
     username: str
@@ -60,3 +63,8 @@ class PersonOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Schema for person login
+class PersonLogin(BaseModel):
+    username: str
+    password: str
