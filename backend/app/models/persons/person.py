@@ -161,10 +161,32 @@ async def update_person(person_id: int, person: PersonUpdate) -> Optional[Person
 # Delete person
 # Role: hr_admin
 async def delete_person(person_id: int) -> Optional[int]:
+    # Fetch person data before deletion for history logging
+    person = await get_person(person_id)
+    if not person:
+        logger.warning(f"Person not found for deletion: id={person_id}")
+        return None
+    # Log deletion history before actual deletion
+    await log_person_history(person_id, {
+        "username": person.username,
+        "personal_id_number": person.personal_id_number,
+        "first_name": person.first_name,
+        "middle_name": person.middle_name,
+        "last_name": person.last_name,
+        "nick_name": person.nick_name,
+        "birth_date": person.birth_date,
+        "gender_type_id": person.gender_type_id,
+        "marital_status_type_id": person.marital_status_type_id,
+        "country_id": person.country_id,
+        "height": person.height,
+        "weight": person.weight,
+        "ethnicity_type_id": person.ethnicity_type_id,
+        "income_range_id": person.income_range_id,
+        "comment": person.comment
+    }, "delete")
+    # Perform deletion
     query = "DELETE FROM persons WHERE id = :id RETURNING id"
     result = await database.fetch_one(query=query, values={"id": person_id})
-    if result:
-        await log_person_history(person_id, {"id": person_id}, "delete")
     logger.info(f"Deleted person: id={person_id}")
     return result["id"] if result else None
 
@@ -173,12 +195,12 @@ async def delete_person(person_id: int) -> Optional[int]:
 async def log_person_history(person_id: int, data: dict, action: str):
     query = """
         INSERT INTO person_history (
-            person_id, username, password, personal_id_number, first_name, middle_name, last_name, 
+            person_id, username, personal_id_number, first_name, middle_name, last_name, 
             nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
             height, weight, ethnicity_type_id, income_range_id, comment, action, action_at
         )
         VALUES (
-            :person_id, :username, :password, :personal_id_number, :first_name, :middle_name, :last_name, 
+            :person_id, :username, :personal_id_number, :first_name, :middle_name, :last_name, 
             :nick_name, :birth_date, :gender_type_id, :marital_status_type_id, :country_id, 
             :height, :weight, :ethnicity_type_id, :income_range_id, :comment, :action, :action_at
         )
@@ -186,7 +208,6 @@ async def log_person_history(person_id: int, data: dict, action: str):
     values = {
         "person_id": person_id,
         "username": data.get("username"),
-        "password": data.get("password"),
         "personal_id_number": data.get("personal_id_number"),
         "first_name": data.get("first_name"),
         "middle_name": data.get("middle_name"),

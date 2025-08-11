@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
-from app.config.settings import SECRET_KEY, BCRYPT_SALT
+from app.config.settings import SECRET_KEY, BCRYPT_SALT, ALGORITHM
 from app.config.database import database
 import bcrypt
 import logging
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-ALGORITHM = "HS256"
+# ALGORITHM = "HS256"
 
 def create_access_token(data: dict):
     try:

@@ -127,10 +127,25 @@ async def update_organization(organization_id: int, organization: OrganizationUp
 # Delete organization
 # Role: organization_admin
 async def delete_organization(organization_id: int) -> Optional[int]:
+    # Fetch organization data before deletion for history logging
+    organization = await get_organization(organization_id)
+    if not organization:
+        logger.warning(f"Organization not found for deletion: id={organization_id}")
+        return None
+    # Log deletion history before actual deletion
+    await log_organization_history(organization_id, {
+        "federal_tax_id": organization.federal_tax_id,
+        "name_en": organization.name_en,
+        "name_th": organization.name_th,
+        "organization_type_id": organization.organization_type_id,
+        "industry_type_id": organization.industry_type_id,
+        "employee_count_range_id": organization.employee_count_range_id,
+        "username": organization.username,
+        "comment": organization.comment
+    }, "delete")
+    # Perform deletion
     query = "DELETE FROM organizations WHERE id = :id RETURNING id"
     result = await database.fetch_one(query=query, values={"id": organization_id})
-    if result:
-        await log_organization_history(organization_id, {"id": organization_id}, "delete")
     logger.info(f"Deleted organization: id={organization_id}")
     return result["id"] if result else None
 
