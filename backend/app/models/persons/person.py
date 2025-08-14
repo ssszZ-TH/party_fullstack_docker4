@@ -9,54 +9,61 @@ from app.schemas.person import PersonCreate, PersonUpdate, PersonOut
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create person with hashed password
+# Create person with hashed password, insert into party first
 # Role: hr_admin
 async def create_person(person: PersonCreate) -> Optional[PersonOut]:
-    try:
-        query = """
-            INSERT INTO persons (
-                username, password, personal_id_number, first_name, middle_name, last_name, 
-                nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
-                height, weight, ethnicity_type_id, income_range_id, comment, created_at
-            )
-            VALUES (
-                :username, :password, :personal_id_number, :first_name, :middle_name, :last_name, 
-                :nick_name, :birth_date, :gender_type_id, :marital_status_type_id, :country_id, 
-                :height, :weight, :ethnicity_type_id, :income_range_id, :comment, :created_at
-            )
-            RETURNING id, username, personal_id_number, first_name, middle_name, last_name, 
-                      nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
-                      height, weight, ethnicity_type_id, income_range_id, comment, created_at, updated_at
-        """
-        hashed_password = bcrypt.hashpw(person.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
-        now = datetime.utcnow()
-        values = {
-            "username": person.username,
-            "password": hashed_password,
-            "personal_id_number": person.personal_id_number,
-            "first_name": person.first_name,
-            "middle_name": person.middle_name,
-            "last_name": person.last_name,
-            "nick_name": person.nick_name,
-            "birth_date": person.birth_date,
-            "gender_type_id": person.gender_type_id,
-            "marital_status_type_id": person.marital_status_type_id,
-            "country_id": person.country_id,
-            "height": person.height,
-            "weight": person.weight,
-            "ethnicity_type_id": person.ethnicity_type_id,
-            "income_range_id": person.income_range_id,
-            "comment": person.comment,
-            "created_at": now
-        }
-        result = await database.fetch_one(query=query, values=values)
-        if result:
-            await log_person_history(result["id"], values, "create")
-        logger.info(f"Created person: {person.username}")
-        return PersonOut(**result._mapping) if result else None
-    except Exception as e:
-        logger.error(f"Error creating person: {str(e)}")
-        raise
+    async with database.transaction():
+        try:
+            # Insert into party table to get party_id
+            query_party = "INSERT INTO party DEFAULT VALUES RETURNING id"
+            party_id = await database.fetch_val(query=query_party)
+
+            # Insert into persons table
+            query = """
+                INSERT INTO persons (
+                    id, username, password, personal_id_number, first_name, middle_name, last_name, 
+                    nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
+                    height, weight, ethnicity_type_id, income_range_id, comment, created_at
+                )
+                VALUES (
+                    :id, :username, :password, :personal_id_number, :first_name, :middle_name, :last_name, 
+                    :nick_name, :birth_date, :gender_type_id, :marital_status_type_id, :country_id, 
+                    :height, :weight, :ethnicity_type_id, :income_range_id, :comment, :created_at
+                )
+                RETURNING id, username, personal_id_number, first_name, middle_name, last_name, 
+                          nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
+                          height, weight, ethnicity_type_id, income_range_id, comment, created_at, updated_at
+            """
+            hashed_password = bcrypt.hashpw(person.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+            now = datetime.utcnow()
+            values = {
+                "id": party_id,
+                "username": person.username,
+                "password": hashed_password,
+                "personal_id_number": person.personal_id_number,
+                "first_name": person.first_name,
+                "middle_name": person.middle_name,
+                "last_name": person.last_name,
+                "nick_name": person.nick_name,
+                "birth_date": person.birth_date,
+                "gender_type_id": person.gender_type_id,
+                "marital_status_type_id": person.marital_status_type_id,
+                "country_id": person.country_id,
+                "height": person.height,
+                "weight": person.weight,
+                "ethnicity_type_id": person.ethnicity_type_id,
+                "income_range_id": person.income_range_id,
+                "comment": person.comment,
+                "created_at": now
+            }
+            result = await database.fetch_one(query=query, values=values)
+            if result:
+                await log_person_history(party_id, values, "create")
+            logger.info(f"Created person: {person.username}")
+            return PersonOut(**result._mapping) if result else None
+        except Exception as e:
+            logger.error(f"Error creating person: {str(e)}")
+            raise
 
 # Get person by ID
 # Role: hr_admin, person_user (own data only)
@@ -87,108 +94,118 @@ async def get_all_persons() -> List[PersonOut]:
 # Update person with optional fields
 # Role: hr_admin
 async def update_person(person_id: int, person: PersonUpdate) -> Optional[PersonOut]:
-    values = {"id": person_id, "updated_at": datetime.utcnow()}
-    query_parts = []
-    
-    if person.username is not None:
-        query_parts.append("username = :username")
-        values["username"] = person.username
-    if person.password is not None:
-        hashed_password = bcrypt.hashpw(person.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
-        query_parts.append("password = :password")
-        values["password"] = hashed_password
-    if person.personal_id_number is not None:
-        query_parts.append("personal_id_number = :personal_id_number")
-        values["personal_id_number"] = person.personal_id_number
-    if person.first_name is not None:
-        query_parts.append("first_name = :first_name")
-        values["first_name"] = person.first_name
-    if person.middle_name is not None:
-        query_parts.append("middle_name = :middle_name")
-        values["middle_name"] = person.middle_name
-    if person.last_name is not None:
-        query_parts.append("last_name = :last_name")
-        values["last_name"] = person.last_name
-    if person.nick_name is not None:
-        query_parts.append("nick_name = :nick_name")
-        values["nick_name"] = person.nick_name
-    if person.birth_date is not None:
-        query_parts.append("birth_date = :birth_date")
-        values["birth_date"] = person.birth_date
-    if person.gender_type_id is not None:
-        query_parts.append("gender_type_id = :gender_type_id")
-        values["gender_type_id"] = person.gender_type_id
-    if person.marital_status_type_id is not None:
-        query_parts.append("marital_status_type_id = :marital_status_type_id")
-        values["marital_status_type_id"] = person.marital_status_type_id
-    if person.country_id is not None:
-        query_parts.append("country_id = :country_id")
-        values["country_id"] = person.country_id
-    if person.height is not None:
-        query_parts.append("height = :height")
-        values["height"] = person.height
-    if person.weight is not None:
-        query_parts.append("weight = :weight")
-        values["weight"] = person.weight
-    if person.ethnicity_type_id is not None:
-        query_parts.append("ethnicity_type_id = :ethnicity_type_id")
-        values["ethnicity_type_id"] = person.ethnicity_type_id
-    if person.income_range_id is not None:
-        query_parts.append("income_range_id = :income_range_id")
-        values["income_range_id"] = person.income_range_id
-    if person.comment is not None:
-        query_parts.append("comment = :comment")
-        values["comment"] = person.comment
+    async with database.transaction():
+        try:
+            values = {"id": person_id, "updated_at": datetime.utcnow()}
+            query_parts = []
 
-    if not query_parts:
-        logger.info(f"No fields to update for person id={person_id}")
-        return None
+            if person.username is not None:
+                query_parts.append("username = :username")
+                values["username"] = person.username
+            if person.password is not None:
+                hashed_password = bcrypt.hashpw(person.password.encode('utf-8'), BCRYPT_SALT.encode('utf-8')).decode('utf-8')
+                query_parts.append("password = :password")
+                values["password"] = hashed_password
+            if person.personal_id_number is not None:
+                query_parts.append("personal_id_number = :personal_id_number")
+                values["personal_id_number"] = person.personal_id_number
+            if person.first_name is not None:
+                query_parts.append("first_name = :first_name")
+                values["first_name"] = person.first_name
+            if person.middle_name is not None:
+                query_parts.append("middle_name = :middle_name")
+                values["middle_name"] = person.middle_name
+            if person.last_name is not None:
+                query_parts.append("last_name = :last_name")
+                values["last_name"] = person.last_name
+            if person.nick_name is not None:
+                query_parts.append("nick_name = :nick_name")
+                values["nick_name"] = person.nick_name
+            if person.birth_date is not None:
+                query_parts.append("birth_date = :birth_date")
+                values["birth_date"] = person.birth_date
+            if person.gender_type_id is not None:
+                query_parts.append("gender_type_id = :gender_type_id")
+                values["gender_type_id"] = person.gender_type_id
+            if person.marital_status_type_id is not None:
+                query_parts.append("marital_status_type_id = :marital_status_type_id")
+                values["marital_status_type_id"] = person.marital_status_type_id
+            if person.country_id is not None:
+                query_parts.append("country_id = :country_id")
+                values["country_id"] = person.country_id
+            if person.height is not None:
+                query_parts.append("height = :height")
+                values["height"] = person.height
+            if person.weight is not None:
+                query_parts.append("weight = :weight")
+                values["weight"] = person.weight
+            if person.ethnicity_type_id is not None:
+                query_parts.append("ethnicity_type_id = :ethnicity_type_id")
+                values["ethnicity_type_id"] = person.ethnicity_type_id
+            if person.income_range_id is not None:
+                query_parts.append("income_range_id = :income_range_id")
+                values["income_range_id"] = person.income_range_id
+            if person.comment is not None:
+                query_parts.append("comment = :comment")
+                values["comment"] = person.comment
 
-    query = f"""
-        UPDATE persons
-        SET {', '.join(query_parts)}, updated_at = :updated_at
-        WHERE id = :id
-        RETURNING id, username, personal_id_number, first_name, middle_name, last_name, 
-                  nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
-                  height, weight, ethnicity_type_id, income_range_id, comment, created_at, updated_at
-    """
-    result = await database.fetch_one(query=query, values=values)
-    if result:
-        await log_person_history(person_id, values, "update")
-    logger.info(f"Updated person: id={person_id}")
-    return PersonOut(**result._mapping) if result else None
+            if not query_parts:
+                logger.info(f"No fields to update for person id={person_id}")
+                return None
 
-# Delete person
+            query = f"""
+                UPDATE persons
+                SET {', '.join(query_parts)}, updated_at = :updated_at
+                WHERE id = :id
+                RETURNING id, username, personal_id_number, first_name, middle_name, last_name, 
+                          nick_name, birth_date, gender_type_id, marital_status_type_id, country_id, 
+                          height, weight, ethnicity_type_id, income_range_id, comment, created_at, updated_at
+            """
+            result = await database.fetch_one(query=query, values=values)
+            if result:
+                await log_person_history(person_id, values, "update")
+            logger.info(f"Updated person: id={person_id}")
+            return PersonOut(**result._mapping) if result else None
+        except Exception as e:
+            logger.error(f"Error updating person: {str(e)}")
+            raise
+
+# Delete person, deletes party automatically via ON DELETE CASCADE
 # Role: hr_admin
 async def delete_person(person_id: int) -> Optional[int]:
-    # Fetch person data before deletion for history logging
-    person = await get_person(person_id)
-    if not person:
-        logger.warning(f"Person not found for deletion: id={person_id}")
-        return None
-    # Log deletion history before actual deletion
-    await log_person_history(person_id, {
-        "username": person.username,
-        "personal_id_number": person.personal_id_number,
-        "first_name": person.first_name,
-        "middle_name": person.middle_name,
-        "last_name": person.last_name,
-        "nick_name": person.nick_name,
-        "birth_date": person.birth_date,
-        "gender_type_id": person.gender_type_id,
-        "marital_status_type_id": person.marital_status_type_id,
-        "country_id": person.country_id,
-        "height": person.height,
-        "weight": person.weight,
-        "ethnicity_type_id": person.ethnicity_type_id,
-        "income_range_id": person.income_range_id,
-        "comment": person.comment
-    }, "delete")
-    # Perform deletion
-    query = "DELETE FROM persons WHERE id = :id RETURNING id"
-    result = await database.fetch_one(query=query, values={"id": person_id})
-    logger.info(f"Deleted person: id={person_id}")
-    return result["id"] if result else None
+    async with database.transaction():
+        try:
+            # Fetch person data before deletion for history logging
+            person = await get_person(person_id)
+            if not person:
+                logger.warning(f"Person not found for deletion: id={person_id}")
+                return None
+            # Log deletion history before actual deletion
+            await log_person_history(person_id, {
+                "username": person.username,
+                "personal_id_number": person.personal_id_number,
+                "first_name": person.first_name,
+                "middle_name": person.middle_name,
+                "last_name": person.last_name,
+                "nick_name": person.nick_name,
+                "birth_date": person.birth_date,
+                "gender_type_id": person.gender_type_id,
+                "marital_status_type_id": person.marital_status_type_id,
+                "country_id": person.country_id,
+                "height": person.height,
+                "weight": person.weight,
+                "ethnicity_type_id": person.ethnicity_type_id,
+                "income_range_id": person.income_range_id,
+                "comment": person.comment
+            }, "delete")
+            # Perform deletion (party table deleted via ON DELETE CASCADE)
+            query = "DELETE FROM persons WHERE id = :id RETURNING id"
+            result = await database.fetch_one(query=query, values={"id": person_id})
+            logger.info(f"Deleted person: id={person_id}")
+            return result["id"] if result else None
+        except Exception as e:
+            logger.error(f"Error deleting person: {str(e)}")
+            raise
 
 # Log person history
 # Role: hr_admin
