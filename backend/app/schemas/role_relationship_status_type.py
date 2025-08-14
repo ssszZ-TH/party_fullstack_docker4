@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 
 # Schema for creating role relationship status type
 class RoleRelationshipStatusTypeCreate(BaseModel):
@@ -14,8 +13,6 @@ class RoleRelationshipStatusTypeUpdate(BaseModel):
 class RoleRelationshipStatusTypeOut(BaseModel):
     id: int
     description: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

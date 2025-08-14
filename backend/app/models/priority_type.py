@@ -1,22 +1,21 @@
 from app.config.database import database
 import logging
 from typing import Optional, List
-from datetime import datetime
 from app.schemas.priority_type import PriorityTypeCreate, PriorityTypeUpdate, PriorityTypeOut
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create priority type
+# Create a new priority type
 async def create_priority_type(priority_type: PriorityTypeCreate) -> Optional[PriorityTypeOut]:
     async with database.transaction():
         try:
             query = """
-                INSERT INTO priority_types (description, created_at)
-                VALUES (:description, :created_at)
-                RETURNING id, description, created_at, updated_at
+                INSERT INTO priority_types (description)
+                VALUES (:description)
+                RETURNING id, description
             """
-            values = {"description": priority_type.description, "created_at": datetime.utcnow()}
+            values = {"description": priority_type.description}
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Created priority type: {priority_type.description}")
             return PriorityTypeOut(**result._mapping) if result else None
@@ -27,7 +26,7 @@ async def create_priority_type(priority_type: PriorityTypeCreate) -> Optional[Pr
 # Get priority type by ID
 async def get_priority_type(priority_type_id: int) -> Optional[PriorityTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM priority_types WHERE id = :id
     """
     result = await database.fetch_one(query=query, values={"id": priority_type_id})
@@ -37,7 +36,7 @@ async def get_priority_type(priority_type_id: int) -> Optional[PriorityTypeOut]:
 # Get all priority types
 async def get_all_priority_types() -> List[PriorityTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM priority_types ORDER BY id ASC
     """
     results = await database.fetch_all(query=query)
@@ -48,7 +47,7 @@ async def get_all_priority_types() -> List[PriorityTypeOut]:
 async def update_priority_type(priority_type_id: int, priority_type: PriorityTypeUpdate) -> Optional[PriorityTypeOut]:
     async with database.transaction():
         try:
-            values = {"id": priority_type_id, "updated_at": datetime.utcnow()}
+            values = {"id": priority_type_id}
             query_parts = []
 
             if priority_type.description is not None:
@@ -61,9 +60,9 @@ async def update_priority_type(priority_type_id: int, priority_type: PriorityTyp
 
             query = f"""
                 UPDATE priority_types
-                SET {', '.join(query_parts)}, updated_at = :updated_at
+                SET {', '.join(query_parts)}
                 WHERE id = :id
-                RETURNING id, description, created_at, updated_at
+                RETURNING id, description
             """
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Updated priority type: id={priority_type_id}")

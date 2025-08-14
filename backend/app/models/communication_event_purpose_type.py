@@ -1,22 +1,21 @@
 from app.config.database import database
 import logging
 from typing import Optional, List
-from datetime import datetime
 from app.schemas.communication_event_purpose_type import CommunicationEventPurposeTypeCreate, CommunicationEventPurposeTypeUpdate, CommunicationEventPurposeTypeOut
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create communication event purpose type
+# Create a new communication event purpose type
 async def create_communication_event_purpose_type(communication_event_purpose_type: CommunicationEventPurposeTypeCreate) -> Optional[CommunicationEventPurposeTypeOut]:
     async with database.transaction():
         try:
             query = """
-                INSERT INTO communication_event_purpose_types (description, created_at)
-                VALUES (:description, :created_at)
-                RETURNING id, description, created_at, updated_at
+                INSERT INTO communication_event_purpose_types (description)
+                VALUES (:description)
+                RETURNING id, description
             """
-            values = {"description": communication_event_purpose_type.description, "created_at": datetime.utcnow()}
+            values = {"description": communication_event_purpose_type.description}
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Created communication event purpose type: {communication_event_purpose_type.description}")
             return CommunicationEventPurposeTypeOut(**result._mapping) if result else None
@@ -27,7 +26,7 @@ async def create_communication_event_purpose_type(communication_event_purpose_ty
 # Get communication event purpose type by ID
 async def get_communication_event_purpose_type(communication_event_purpose_type_id: int) -> Optional[CommunicationEventPurposeTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM communication_event_purpose_types WHERE id = :id
     """
     result = await database.fetch_one(query=query, values={"id": communication_event_purpose_type_id})
@@ -37,7 +36,7 @@ async def get_communication_event_purpose_type(communication_event_purpose_type_
 # Get all communication event purpose types
 async def get_all_communication_event_purpose_types() -> List[CommunicationEventPurposeTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM communication_event_purpose_types ORDER BY id ASC
     """
     results = await database.fetch_all(query=query)
@@ -48,7 +47,7 @@ async def get_all_communication_event_purpose_types() -> List[CommunicationEvent
 async def update_communication_event_purpose_type(communication_event_purpose_type_id: int, communication_event_purpose_type: CommunicationEventPurposeTypeUpdate) -> Optional[CommunicationEventPurposeTypeOut]:
     async with database.transaction():
         try:
-            values = {"id": communication_event_purpose_type_id, "updated_at": datetime.utcnow()}
+            values = {"id": communication_event_purpose_type_id}
             query_parts = []
 
             if communication_event_purpose_type.description is not None:
@@ -61,9 +60,9 @@ async def update_communication_event_purpose_type(communication_event_purpose_ty
 
             query = f"""
                 UPDATE communication_event_purpose_types
-                SET {', '.join(query_parts)}, updated_at = :updated_at
+                SET {', '.join(query_parts)}
                 WHERE id = :id
-                RETURNING id, description, created_at, updated_at
+                RETURNING id, description
             """
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Updated communication event purpose type: id={communication_event_purpose_type_id}")

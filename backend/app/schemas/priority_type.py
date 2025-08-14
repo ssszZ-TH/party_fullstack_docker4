@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 
 # Schema for creating priority type
 class PriorityTypeCreate(BaseModel):
@@ -14,8 +13,6 @@ class PriorityTypeUpdate(BaseModel):
 class PriorityTypeOut(BaseModel):
     id: int
     description: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

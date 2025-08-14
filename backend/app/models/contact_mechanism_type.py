@@ -1,22 +1,21 @@
 from app.config.database import database
 import logging
 from typing import Optional, List
-from datetime import datetime
 from app.schemas.contact_mechanism_type import ContactMechanismTypeCreate, ContactMechanismTypeUpdate, ContactMechanismTypeOut
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create contact mechanism type
+# Create a new contact mechanism type
 async def create_contact_mechanism_type(contact_mechanism_type: ContactMechanismTypeCreate) -> Optional[ContactMechanismTypeOut]:
     async with database.transaction():
         try:
             query = """
-                INSERT INTO contact_mechanism_types (description, created_at)
-                VALUES (:description, :created_at)
-                RETURNING id, description, created_at, updated_at
+                INSERT INTO contact_mechanism_types (description)
+                VALUES (:description)
+                RETURNING id, description
             """
-            values = {"description": contact_mechanism_type.description, "created_at": datetime.utcnow()}
+            values = {"description": contact_mechanism_type.description}
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Created contact mechanism type: {contact_mechanism_type.description}")
             return ContactMechanismTypeOut(**result._mapping) if result else None
@@ -27,7 +26,7 @@ async def create_contact_mechanism_type(contact_mechanism_type: ContactMechanism
 # Get contact mechanism type by ID
 async def get_contact_mechanism_type(contact_mechanism_type_id: int) -> Optional[ContactMechanismTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM contact_mechanism_types WHERE id = :id
     """
     result = await database.fetch_one(query=query, values={"id": contact_mechanism_type_id})
@@ -37,7 +36,7 @@ async def get_contact_mechanism_type(contact_mechanism_type_id: int) -> Optional
 # Get all contact mechanism types
 async def get_all_contact_mechanism_types() -> List[ContactMechanismTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM contact_mechanism_types ORDER BY id ASC
     """
     results = await database.fetch_all(query=query)
@@ -48,7 +47,7 @@ async def get_all_contact_mechanism_types() -> List[ContactMechanismTypeOut]:
 async def update_contact_mechanism_type(contact_mechanism_type_id: int, contact_mechanism_type: ContactMechanismTypeUpdate) -> Optional[ContactMechanismTypeOut]:
     async with database.transaction():
         try:
-            values = {"id": contact_mechanism_type_id, "updated_at": datetime.utcnow()}
+            values = {"id": contact_mechanism_type_id}
             query_parts = []
 
             if contact_mechanism_type.description is not None:
@@ -61,9 +60,9 @@ async def update_contact_mechanism_type(contact_mechanism_type_id: int, contact_
 
             query = f"""
                 UPDATE contact_mechanism_types
-                SET {', '.join(query_parts)}, updated_at = :updated_at
+                SET {', '.join(query_parts)}
                 WHERE id = :id
-                RETURNING id, description, created_at, updated_at
+                RETURNING id, description
             """
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Updated contact mechanism type: id={contact_mechanism_type_id}")

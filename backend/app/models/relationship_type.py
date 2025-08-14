@@ -1,22 +1,21 @@
 from app.config.database import database
 import logging
 from typing import Optional, List
-from datetime import datetime
 from app.schemas.relationship_type import RelationshipTypeCreate, RelationshipTypeUpdate, RelationshipTypeOut
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create relationship type
+# Create a new relationship type
 async def create_relationship_type(relationship_type: RelationshipTypeCreate) -> Optional[RelationshipTypeOut]:
     async with database.transaction():
         try:
             query = """
-                INSERT INTO relationship_types (description, created_at)
-                VALUES (:description, :created_at)
-                RETURNING id, description, created_at, updated_at
+                INSERT INTO relationship_types (description)
+                VALUES (:description)
+                RETURNING id, description
             """
-            values = {"description": relationship_type.description, "created_at": datetime.utcnow()}
+            values = {"description": relationship_type.description}
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Created relationship type: {relationship_type.description}")
             return RelationshipTypeOut(**result._mapping) if result else None
@@ -27,7 +26,7 @@ async def create_relationship_type(relationship_type: RelationshipTypeCreate) ->
 # Get relationship type by ID
 async def get_relationship_type(relationship_type_id: int) -> Optional[RelationshipTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM relationship_types WHERE id = :id
     """
     result = await database.fetch_one(query=query, values={"id": relationship_type_id})
@@ -37,7 +36,7 @@ async def get_relationship_type(relationship_type_id: int) -> Optional[Relations
 # Get all relationship types
 async def get_all_relationship_types() -> List[RelationshipTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM relationship_types ORDER BY id ASC
     """
     results = await database.fetch_all(query=query)
@@ -48,7 +47,7 @@ async def get_all_relationship_types() -> List[RelationshipTypeOut]:
 async def update_relationship_type(relationship_type_id: int, relationship_type: RelationshipTypeUpdate) -> Optional[RelationshipTypeOut]:
     async with database.transaction():
         try:
-            values = {"id": relationship_type_id, "updated_at": datetime.utcnow()}
+            values = {"id": relationship_type_id}
             query_parts = []
 
             if relationship_type.description is not None:
@@ -61,9 +60,9 @@ async def update_relationship_type(relationship_type_id: int, relationship_type:
 
             query = f"""
                 UPDATE relationship_types
-                SET {', '.join(query_parts)}, updated_at = :updated_at
+                SET {', '.join(query_parts)}
                 WHERE id = :id
-                RETURNING id, description, created_at, updated_at
+                RETURNING id, description
             """
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Updated relationship type: id={relationship_type_id}")

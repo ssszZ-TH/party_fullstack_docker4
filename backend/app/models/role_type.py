@@ -1,22 +1,21 @@
 from app.config.database import database
 import logging
 from typing import Optional, List
-from datetime import datetime
 from app.schemas.role_type import RoleTypeCreate, RoleTypeUpdate, RoleTypeOut
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create role type
+# Create a new role type
 async def create_role_type(role_type: RoleTypeCreate) -> Optional[RoleTypeOut]:
     async with database.transaction():
         try:
             query = """
-                INSERT INTO role_types (description, created_at)
-                VALUES (:description, :created_at)
-                RETURNING id, description, created_at, updated_at
+                INSERT INTO role_types (description)
+                VALUES (:description)
+                RETURNING id, description
             """
-            values = {"description": role_type.description, "created_at": datetime.utcnow()}
+            values = {"description": role_type.description}
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Created role type: {role_type.description}")
             return RoleTypeOut(**result._mapping) if result else None
@@ -27,7 +26,7 @@ async def create_role_type(role_type: RoleTypeCreate) -> Optional[RoleTypeOut]:
 # Get role type by ID
 async def get_role_type(role_type_id: int) -> Optional[RoleTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM role_types WHERE id = :id
     """
     result = await database.fetch_one(query=query, values={"id": role_type_id})
@@ -37,7 +36,7 @@ async def get_role_type(role_type_id: int) -> Optional[RoleTypeOut]:
 # Get all role types
 async def get_all_role_types() -> List[RoleTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM role_types ORDER BY id ASC
     """
     results = await database.fetch_all(query=query)
@@ -48,7 +47,7 @@ async def get_all_role_types() -> List[RoleTypeOut]:
 async def update_role_type(role_type_id: int, role_type: RoleTypeUpdate) -> Optional[RoleTypeOut]:
     async with database.transaction():
         try:
-            values = {"id": role_type_id, "updated_at": datetime.utcnow()}
+            values = {"id": role_type_id}
             query_parts = []
 
             if role_type.description is not None:
@@ -61,9 +60,9 @@ async def update_role_type(role_type_id: int, role_type: RoleTypeUpdate) -> Opti
 
             query = f"""
                 UPDATE role_types
-                SET {', '.join(query_parts)}, updated_at = :updated_at
+                SET {', '.join(query_parts)}
                 WHERE id = :id
-                RETURNING id, description, created_at, updated_at
+                RETURNING id, description
             """
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Updated role type: id={role_type_id}")

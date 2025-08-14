@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
 
 # Schema for creating communication event purpose type
 class CommunicationEventPurposeTypeCreate(BaseModel):
@@ -14,8 +13,6 @@ class CommunicationEventPurposeTypeUpdate(BaseModel):
 class CommunicationEventPurposeTypeOut(BaseModel):
     id: int
     description: str
-    created_at: datetime
-    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

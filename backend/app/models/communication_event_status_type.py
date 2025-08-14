@@ -1,22 +1,21 @@
 from app.config.database import database
 import logging
 from typing import Optional, List
-from datetime import datetime
 from app.schemas.communication_event_status_type import CommunicationEventStatusTypeCreate, CommunicationEventStatusTypeUpdate, CommunicationEventStatusTypeOut
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create communication event status type
+# Create a new communication event status type
 async def create_communication_event_status_type(communication_event_status_type: CommunicationEventStatusTypeCreate) -> Optional[CommunicationEventStatusTypeOut]:
     async with database.transaction():
         try:
             query = """
-                INSERT INTO communication_event_status_types (description, created_at)
-                VALUES (:description, :created_at)
-                RETURNING id, description, created_at, updated_at
+                INSERT INTO communication_event_status_types (description)
+                VALUES (:description)
+                RETURNING id, description
             """
-            values = {"description": communication_event_status_type.description, "created_at": datetime.utcnow()}
+            values = {"description": communication_event_status_type.description}
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Created communication event status type: {communication_event_status_type.description}")
             return CommunicationEventStatusTypeOut(**result._mapping) if result else None
@@ -27,7 +26,7 @@ async def create_communication_event_status_type(communication_event_status_type
 # Get communication event status type by ID
 async def get_communication_event_status_type(communication_event_status_type_id: int) -> Optional[CommunicationEventStatusTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM communication_event_status_types WHERE id = :id
     """
     result = await database.fetch_one(query=query, values={"id": communication_event_status_type_id})
@@ -37,7 +36,7 @@ async def get_communication_event_status_type(communication_event_status_type_id
 # Get all communication event status types
 async def get_all_communication_event_status_types() -> List[CommunicationEventStatusTypeOut]:
     query = """
-        SELECT id, description, created_at, updated_at 
+        SELECT id, description 
         FROM communication_event_status_types ORDER BY id ASC
     """
     results = await database.fetch_all(query=query)
@@ -48,7 +47,7 @@ async def get_all_communication_event_status_types() -> List[CommunicationEventS
 async def update_communication_event_status_type(communication_event_status_type_id: int, communication_event_status_type: CommunicationEventStatusTypeUpdate) -> Optional[CommunicationEventStatusTypeOut]:
     async with database.transaction():
         try:
-            values = {"id": communication_event_status_type_id, "updated_at": datetime.utcnow()}
+            values = {"id": communication_event_status_type_id}
             query_parts = []
 
             if communication_event_status_type.description is not None:
@@ -61,9 +60,9 @@ async def update_communication_event_status_type(communication_event_status_type
 
             query = f"""
                 UPDATE communication_event_status_types
-                SET {', '.join(query_parts)}, updated_at = :updated_at
+                SET {', '.join(query_parts)}
                 WHERE id = :id
-                RETURNING id, description, created_at, updated_at
+                RETURNING id, description
             """
             result = await database.fetch_one(query=query, values=values)
             logger.info(f"Updated communication event status type: id={communication_event_status_type_id}")
