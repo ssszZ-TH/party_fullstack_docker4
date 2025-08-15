@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 async def create_passport(passport: PassportCreate) -> Optional[PassportOut]:
     async with database.transaction():
         try:
+            # Insert into passports table
             query = """
                 INSERT INTO passports (passport_id_number, issue_date, expire_date, person_id)
                 VALUES (:passport_id_number, :issue_date, :expire_date, :person_id)
@@ -17,8 +18,26 @@ async def create_passport(passport: PassportCreate) -> Optional[PassportOut]:
             """
             values = passport.dict()
             result = await database.fetch_one(query=query, values=values)
+            if not result:
+                logger.warning(f"Failed to create passport: {passport.passport_id_number}")
+                return None
+
+            # Insert into passport_history table
+            history_query = """
+                INSERT INTO passport_history (passport_id, passport_id_number, issue_date, expire_date, person_id, action)
+                VALUES (:passport_id, :passport_id_number, :issue_date, :expire_date, :person_id, 'CREATE')
+            """
+            history_values = {
+                "passport_id": result["id"],
+                "passport_id_number": passport.passport_id_number,
+                "issue_date": passport.issue_date,
+                "expire_date": passport.expire_date,
+                "person_id": passport.person_id
+            }
+            await database.execute(query=history_query, values=history_values)
+
             logger.info(f"Created passport: {passport.passport_id_number}")
-            return PassportOut(**result._mapping) if result else None
+            return PassportOut(**result._mapping)
         except Exception as e:
             logger.error(f"Error creating passport: {str(e)}")
             raise
@@ -47,6 +66,12 @@ async def get_all_passports() -> List[PassportOut]:
 async def update_passport(passport_id: int, passport: PassportUpdate) -> Optional[PassportOut]:
     async with database.transaction():
         try:
+            # Get current passport data for history
+            current_passport = await get_passport(passport_id)
+            if not current_passport:
+                logger.warning(f"Passport not found for update: id={passport_id}")
+                return None
+
             values = {"id": passport_id}
             query_parts = []
 
@@ -69,6 +94,7 @@ async def update_passport(passport_id: int, passport: PassportUpdate) -> Optiona
                 logger.info(f"No fields to update for passport id={passport_id}")
                 return None
 
+            # Update passport
             query = f"""
                 UPDATE passports
                 SET {', '.join(query_parts)}
@@ -76,8 +102,26 @@ async def update_passport(passport_id: int, passport: PassportUpdate) -> Optiona
                 RETURNING id, passport_id_number, issue_date, expire_date, person_id, created_at, updated_at
             """
             result = await database.fetch_one(query=query, values=values)
+            if not result:
+                logger.warning(f"Passport not found or no changes made: id={passport_id}")
+                return None
+
+            # Insert into passport_history table
+            history_query = """
+                INSERT INTO passport_history (passport_id, passport_id_number, issue_date, expire_date, person_id, action)
+                VALUES (:passport_id, :passport_id_number, :issue_date, :expire_date, :person_id, 'UPDATE')
+            """
+            history_values = {
+                "passport_id": passport_id,
+                "passport_id_number": values.get("passport_id_number", current_passport.passport_id_number),
+                "issue_date": values.get("issue_date", current_passport.issue_date),
+                "expire_date": values.get("expire_date", current_passport.expire_date),
+                "person_id": values.get("person_id", current_passport.person_id)
+            }
+            await database.execute(query=history_query, values=history_values)
+
             logger.info(f"Updated passport: id={passport_id}")
-            return PassportOut(**result._mapping) if result else None
+            return PassportOut(**result._mapping)
         except Exception as e:
             logger.error(f"Error updating passport: {str(e)}")
             raise
@@ -86,6 +130,27 @@ async def update_passport(passport_id: int, passport: PassportUpdate) -> Optiona
 async def delete_passport(passport_id: int) -> Optional[int]:
     async with database.transaction():
         try:
+            # Get current passport data for history
+            current_passport = await get_passport(passport_id)
+            if not current_passport:
+                logger.warning(f"Passport not found for deletion: id={passport_id}")
+                return None
+
+            # Insert into passport_history table
+            history_query = """
+                INSERT INTO passport_history (passport_id, passport_id_number, issue_date, expire_date, person_id, action)
+                VALUES (:passport_id, :passport_id_number, :issue_date, :expire_date, :person_id, 'DELETE')
+            """
+            history_values = {
+                "passport_id": passport_id,
+                "passport_id_number": current_passport.passport_id_number,
+                "issue_date": current_passport.issue_date,
+                "expire_date": current_passport.expire_date,
+                "person_id": current_passport.person_id
+            }
+            await database.execute(query=history_query, values=history_values)
+
+            # Delete passport
             query = "DELETE FROM passports WHERE id = :id RETURNING id"
             result = await database.fetch_one(query=query, values={"id": passport_id})
             logger.info(f"Deleted passport: id={passport_id}")

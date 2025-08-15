@@ -5,7 +5,7 @@ Base URL: `{{backend}}/`
 ## Notes
 - Content-Type: `application/json`
 - Token format: `Authorization: Bearer {{admin_token}}`
-- `{{admin_token}}`: Token from user login with `basetype_admin` role
+- `{{admin_token}}`: Token from user login with `hr_admin` role
 - Replace `{{id}}` with actual passport ID
 - Replace `{{person_id}}` with actual person ID from persons table
 
@@ -13,7 +13,7 @@ Base URL: `{{backend}}/`
 1. **Create Passport**
    - **Method**: POST
    - **Path**: `/passports/`
-   - **Token/Role**: `{{admin_token}}` (basetype_admin)
+   - **Token/Role**: `{{admin_token}}` (hr_admin)
    - **JSON Body**:
      ```json
      {
@@ -27,19 +27,19 @@ Base URL: `{{backend}}/`
 2. **Get Passport by ID**
    - **Method**: GET
    - **Path**: `/passports/{{id}}`
-   - **Token/Role**: `{{admin_token}}` (basetype_admin)
+   - **Token/Role**: `{{admin_token}}` (hr_admin)
    - **JSON Body**: None
 
 3. **List All Passports**
    - **Method**: GET
    - **Path**: `/passports/`
-   - **Token/Role**: `{{admin_token}}` (basetype_admin)
+   - **Token/Role**: `{{admin_token}}` (hr_admin)
    - **JSON Body**: None
 
 4. **Update Passport**
    - **Method**: PUT
    - **Path**: `/passports/{{id}}`
-   - **Token/Role**: `{{admin_token}}` (basetype_admin)
+   - **Token/Role**: `{{admin_token}}` (hr_admin)
    - **JSON Body**:
      ```json
      {
@@ -53,7 +53,7 @@ Base URL: `{{backend}}/`
 5. **Delete Passport**
    - **Method**: DELETE
    - **Path**: `/passports/{{id}}`
-   - **Token/Role**: `{{admin_token}}` (basetype_admin)
+   - **Token/Role**: `{{admin_token}}` (hr_admin)
    - **JSON Body**: None
    - **Expected Response**: 
      ```json

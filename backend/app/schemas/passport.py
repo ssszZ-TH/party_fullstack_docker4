@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional
-from datetime import date
+from datetime import date, datetime
 
 # Schema for creating a passport
 class PassportCreate(BaseModel):
@@ -23,8 +23,8 @@ class PassportOut(BaseModel):
     issue_date: date
     expire_date: date
     person_id: Optional[int]
-    created_at: date
-    updated_at: Optional[date]
+    created_at: datetime
+    updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True
