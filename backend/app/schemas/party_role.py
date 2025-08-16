@@ -5,7 +5,7 @@ from datetime import datetime
 # Schema for creating a party role
 class PartyRoleCreate(BaseModel):
     note: Optional[str] = None
-    role_type_id: int
+    role_type_id: Optional[int] = None
 
 # Schema for updating a party role
 class PartyRoleUpdate(BaseModel):

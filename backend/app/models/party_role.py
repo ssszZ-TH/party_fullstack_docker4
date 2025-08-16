@@ -7,19 +7,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create a new party role (organization_user, person_user)
-async def create_party_role(party_role: PartyRoleCreate, party_id: int) -> Optional[PartyRoleOut]:
+async def create_party_role(party_role: PartyRoleCreate, party_id: str) -> Optional[PartyRoleOut]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             query = """
                 INSERT INTO party_role (note, party_id, role_type_id)
                 VALUES (:note, :party_id, :role_type_id)
                 RETURNING id, note, party_id, role_type_id, created_at, updated_at
             """
             values = party_role.dict()
-            values["party_id"] = party_id
+            values["party_id"] = party_id_int
             result = await database.fetch_one(query=query, values=values)
             if not result:
-                logger.warning(f"Failed to create party role for party_id={party_id}")
+                logger.warning(f"Failed to create party role for party_id={party_id_int}")
                 return None
 
             # Insert into party_role_history
@@ -30,48 +32,55 @@ async def create_party_role(party_role: PartyRoleCreate, party_id: int) -> Optio
             history_values = {
                 "party_role_id": result["id"],
                 "note": party_role.note,
-                "party_id": party_id,
+                "party_id": party_id_int,
                 "role_type_id": party_role.role_type_id
             }
             await database.execute(query=history_query, values=history_values)
 
-            logger.info(f"Created party role: id={result['id']} for party_id={party_id}")
+            logger.info(f"Created party role: id={result['id']} for party_id={party_id_int}")
             return PartyRoleOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error creating party role: {str(e)}")
             raise
 
 # Get party role by ID (organization_user, person_user)
-async def get_party_role(party_role_id: int, party_id: int) -> Optional[PartyRoleOut]:
+async def get_party_role(party_role_id: int, party_id: str) -> Optional[PartyRoleOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT id, note, party_id, role_type_id, created_at, updated_at
         FROM party_role WHERE id = :id AND party_id = :party_id
     """
-    result = await database.fetch_one(query=query, values={"id": party_role_id, "party_id": party_id})
-    logger.info(f"Retrieved party role: id={party_role_id} for party_id={party_id}")
+    result = await database.fetch_one(query=query, values={"id": party_role_id, "party_id": party_id_int})
+    logger.info(f"Retrieved party role: id={party_role_id} for party_id={party_id_int}")
     return PartyRoleOut(**result._mapping) if result else None
 
 # Get all party roles for a party (organization_user, person_user)
-async def get_all_party_roles(party_id: int) -> List[PartyRoleOut]:
+async def get_all_party_roles(party_id: str) -> List[PartyRoleOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT id, note, party_id, role_type_id, created_at, updated_at
         FROM party_role WHERE party_id = :party_id ORDER BY id ASC
     """
-    results = await database.fetch_all(query=query, values={"party_id": party_id})
-    logger.info(f"Retrieved {len(results)} party roles for party_id={party_id}")
+    results = await database.fetch_all(query=query, values={"party_id": party_id_int})
+    logger.info(f"Retrieved {len(results)} party roles for party_id={party_id_int}")
     return [PartyRoleOut(**result._mapping) for result in results]
 
 # Update party role (organization_user, person_user)
-async def update_party_role(party_role_id: int, party_role: PartyRoleUpdate, party_id: int) -> Optional[PartyRoleOut]:
+async def update_party_role(party_role_id: int, party_role: PartyRoleUpdate, party_id: str) -> Optional[PartyRoleOut]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Get current party role for history
             current_party_role = await get_party_role(party_role_id, party_id)
             if not current_party_role:
-                logger.warning(f"Party role not found for update: id={party_role_id}, party_id={party_id}")
+                logger.warning(f"Party role not found for update: id={party_role_id}, party_id={party_id_int}")
                 return None
 
-            values = {"id": party_role_id, "party_id": party_id}
+            values = {"id": party_role_id, "party_id": party_id_int}
             query_parts = []
 
             if party_role.note is not None:
@@ -95,7 +104,7 @@ async def update_party_role(party_role_id: int, party_role: PartyRoleUpdate, par
             """
             result = await database.fetch_one(query=query, values=values)
             if not result:
-                logger.warning(f"Party role not found or no changes made: id={party_role_id}, party_id={party_id}")
+                logger.warning(f"Party role not found or no changes made: id={party_role_id}, party_id={party_id_int}")
                 return None
 
             # Insert into party_role_history
@@ -106,25 +115,30 @@ async def update_party_role(party_role_id: int, party_role: PartyRoleUpdate, par
             history_values = {
                 "party_role_id": party_role_id,
                 "note": values.get("note", current_party_role.note),
-                "party_id": party_id,
+                "party_id": party_id_int,
                 "role_type_id": values.get("role_type_id", current_party_role.role_type_id)
             }
             await database.execute(query=history_query, values=history_values)
 
             logger.info(f"Updated party role: id={party_role_id}")
             return PartyRoleOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error updating party role: {str(e)}")
             raise
 
 # Delete party role (organization_user, person_user)
-async def delete_party_role(party_role_id: int, party_id: int) -> Optional[int]:
+async def delete_party_role(party_role_id: int, party_id: str) -> Optional[int]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Get current party role for history
             current_party_role = await get_party_role(party_role_id, party_id)
             if not current_party_role:
-                logger.warning(f"Party role not found for deletion: id={party_role_id}, party_id={party_id}")
+                logger.warning(f"Party role not found for deletion: id={party_role_id}, party_id={party_id_int}")
                 return None
 
             # Insert into party_role_history
@@ -135,16 +149,19 @@ async def delete_party_role(party_role_id: int, party_id: int) -> Optional[int]:
             history_values = {
                 "party_role_id": party_role_id,
                 "note": current_party_role.note,
-                "party_id": party_id,
+                "party_id": party_id_int,
                 "role_type_id": current_party_role.role_type_id
             }
             await database.execute(query=history_query, values=history_values)
 
             # Delete party role
             query = "DELETE FROM party_role WHERE id = :id AND party_id = :party_id RETURNING id"
-            result = await database.fetch_one(query=query, values={"id": party_role_id, "party_id": party_id})
+            result = await database.fetch_one(query=query, values={"id": party_role_id, "party_id": party_id_int})
             logger.info(f"Deleted party role: id={party_role_id}")
             return result["id"] if result else None
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error deleting party role: {str(e)}")
             raise

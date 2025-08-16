@@ -7,9 +7,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create a new communication event (organization_user, person_user)
-async def create_communication_event(communication_event: CommunicationEventCreate, party_id: int) -> Optional[CommunicationEventOut]:
+async def create_communication_event(communication_event: CommunicationEventCreate, party_id: str) -> Optional[CommunicationEventOut]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Verify role_relationship_id is accessible by party_id
             query_check = """
                 SELECT rr.id FROM role_relationship rr
@@ -18,10 +20,10 @@ async def create_communication_event(communication_event: CommunicationEventCrea
             """
             result_check = await database.fetch_one(query=query_check, values={
                 "role_relationship_id": communication_event.role_relationship_id,
-                "party_id": party_id
+                "party_id": party_id_int
             })
             if not result_check:
-                logger.warning(f"Invalid role_relationship_id for party_id={party_id}")
+                logger.warning(f"Invalid role_relationship_id for party_id={party_id_int}")
                 return None
 
             query = """
@@ -48,12 +50,16 @@ async def create_communication_event(communication_event: CommunicationEventCrea
 
             logger.info(f"Created communication event: id={result['id']}")
             return CommunicationEventOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error creating communication event: {str(e)}")
             raise
 
 # Get communication event by ID (organization_user, person_user)
-async def get_communication_event(communication_event_id: int, party_id: int) -> Optional[CommunicationEventOut]:
+async def get_communication_event(communication_event_id: int, party_id: str) -> Optional[CommunicationEventOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT ce.id, ce.note, ce.role_relationship_id, ce.contact_mechanism_type_id, ce.communication_event_status_type_id, ce.created_at, ce.updated_at
         FROM communication_event ce
@@ -61,12 +67,13 @@ async def get_communication_event(communication_event_id: int, party_id: int) ->
         JOIN party_role pr ON pr.id IN (rr.from_party_role_id, rr.to_party_role_id)
         WHERE ce.id = :id AND pr.party_id = :party_id
     """
-    result = await database.fetch_one(query=query, values={"id": communication_event_id, "party_id": party_id})
-    logger.info(f"Retrieved communication event: id={communication_event_id} for party_id={party_id}")
+    result = await database.fetch_one(query=query, values={"id": communication_event_id, "party_id": party_id_int})
+    logger.info(f"Retrieved communication event: id={communication_event_id} for party_id={party_id_int}")
     return CommunicationEventOut(**result._mapping) if result else None
 
 # Get all communication events for a party (organization_user, person_user)
-async def get_all_communication_events(party_id: int) -> List[CommunicationEventOut]:
+async def get_all_communication_events(party_id: str) -> List[CommunicationEventOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT ce.id, ce.note, ce.role_relationship_id, ce.contact_mechanism_type_id, ce.communication_event_status_type_id, ce.created_at, ce.updated_at
         FROM communication_event ce
@@ -75,18 +82,20 @@ async def get_all_communication_events(party_id: int) -> List[CommunicationEvent
         WHERE pr.party_id = :party_id
         ORDER BY ce.id ASC
     """
-    results = await database.fetch_all(query=query, values={"party_id": party_id})
-    logger.info(f"Retrieved {len(results)} communication events for party_id={party_id}")
+    results = await database.fetch_all(query=query, values={"party_id": party_id_int})
+    logger.info(f"Retrieved {len(results)} communication events for party_id={party_id_int}")
     return [CommunicationEventOut(**result._mapping) for result in results]
 
 # Update communication event (organization_user, person_user)
-async def update_communication_event(communication_event_id: int, communication_event: CommunicationEventUpdate, party_id: int) -> Optional[CommunicationEventOut]:
+async def update_communication_event(communication_event_id: int, communication_event: CommunicationEventUpdate, party_id: str) -> Optional[CommunicationEventOut]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Get current communication event for history
             current_communication_event = await get_communication_event(communication_event_id, party_id)
             if not current_communication_event:
-                logger.warning(f"Communication event not found for update: id={communication_event_id}, party_id={party_id}")
+                logger.warning(f"Communication event not found for update: id={communication_event_id}, party_id={party_id_int}")
                 return None
 
             values = {"id": communication_event_id}
@@ -125,7 +134,7 @@ async def update_communication_event(communication_event_id: int, communication_
             # Verify updated record is accessible by party_id
             updated_communication_event = await get_communication_event(communication_event_id, party_id)
             if not updated_communication_event:
-                logger.warning(f"Updated communication event not accessible: id={communication_event_id}, party_id={party_id}")
+                logger.warning(f"Updated communication event not accessible: id={communication_event_id}, party_id={party_id_int}")
                 return None
 
             # Insert into communication_event_history
@@ -144,18 +153,23 @@ async def update_communication_event(communication_event_id: int, communication_
 
             logger.info(f"Updated communication event: id={communication_event_id}")
             return CommunicationEventOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error updating communication event: {str(e)}")
             raise
 
 # Delete communication event (organization_user, person_user)
-async def delete_communication_event(communication_event_id: int, party_id: int) -> Optional[int]:
+async def delete_communication_event(communication_event_id: int, party_id: str) -> Optional[int]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Get current communication event for history
             current_communication_event = await get_communication_event(communication_event_id, party_id)
             if not current_communication_event:
-                logger.warning(f"Communication event not found for deletion: id={communication_event_id}, party_id={party_id}")
+                logger.warning(f"Communication event not found for deletion: id={communication_event_id}, party_id={party_id_int}")
                 return None
 
             # Insert into communication_event_history
@@ -177,6 +191,9 @@ async def delete_communication_event(communication_event_id: int, party_id: int)
             result = await database.fetch_one(query=query, values={"id": communication_event_id})
             logger.info(f"Deleted communication event: id={communication_event_id}")
             return result["id"] if result else None
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error deleting communication event: {str(e)}")
             raise

@@ -7,9 +7,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create a new communication event purpose (organization_user, person_user)
-async def create_communication_event_purpose(communication_event_purpose: CommunicationEventPurposeCreate, party_id: int) -> Optional[CommunicationEventPurposeOut]:
+async def create_communication_event_purpose(communication_event_purpose: CommunicationEventPurposeCreate, party_id: str) -> Optional[CommunicationEventPurposeOut]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Verify communication_event_id is accessible by party_id
             query_check = """
                 SELECT ce.id FROM communication_event ce
@@ -19,10 +21,10 @@ async def create_communication_event_purpose(communication_event_purpose: Commun
             """
             result_check = await database.fetch_one(query=query_check, values={
                 "communication_event_id": communication_event_purpose.communication_event_id,
-                "party_id": party_id
+                "party_id": party_id_int
             })
             if not result_check:
-                logger.warning(f"Invalid communication_event_id for party_id={party_id}")
+                logger.warning(f"Invalid communication_event_id for party_id={party_id_int}")
                 return None
 
             query = """
@@ -49,12 +51,16 @@ async def create_communication_event_purpose(communication_event_purpose: Commun
 
             logger.info(f"Created communication event purpose: id={result['id']}")
             return CommunicationEventPurposeOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error creating communication event purpose: {str(e)}")
             raise
 
 # Get communication event purpose by ID (organization_user, person_user)
-async def get_communication_event_purpose(communication_event_purpose_id: int, party_id: int) -> Optional[CommunicationEventPurposeOut]:
+async def get_communication_event_purpose(communication_event_purpose_id: int, party_id: str) -> Optional[CommunicationEventPurposeOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT cep.id, cep.note, cep.communication_event_id, cep.communication_event_purpose_type_id, cep.created_at, cep.updated_at
         FROM communication_event_purpose cep
@@ -63,12 +69,13 @@ async def get_communication_event_purpose(communication_event_purpose_id: int, p
         JOIN party_role pr ON pr.id IN (rr.from_party_role_id, rr.to_party_role_id)
         WHERE cep.id = :id AND pr.party_id = :party_id
     """
-    result = await database.fetch_one(query=query, values={"id": communication_event_purpose_id, "party_id": party_id})
-    logger.info(f"Retrieved communication event purpose: id={communication_event_purpose_id} for party_id={party_id}")
+    result = await database.fetch_one(query=query, values={"id": communication_event_purpose_id, "party_id": party_id_int})
+    logger.info(f"Retrieved communication event purpose: id={communication_event_purpose_id} for party_id={party_id_int}")
     return CommunicationEventPurposeOut(**result._mapping) if result else None
 
 # Get all communication event purposes for a party (organization_user, person_user)
-async def get_all_communication_event_purposes(party_id: int) -> List[CommunicationEventPurposeOut]:
+async def get_all_communication_event_purposes(party_id: str) -> List[CommunicationEventPurposeOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT cep.id, cep.note, cep.communication_event_id, cep.communication_event_purpose_type_id, cep.created_at, cep.updated_at
         FROM communication_event_purpose cep
@@ -78,18 +85,20 @@ async def get_all_communication_event_purposes(party_id: int) -> List[Communicat
         WHERE pr.party_id = :party_id
         ORDER BY cep.id ASC
     """
-    results = await database.fetch_all(query=query, values={"party_id": party_id})
-    logger.info(f"Retrieved {len(results)} communication event purposes for party_id={party_id}")
+    results = await database.fetch_all(query=query, values={"party_id": party_id_int})
+    logger.info(f"Retrieved {len(results)} communication event purposes for party_id={party_id_int}")
     return [CommunicationEventPurposeOut(**result._mapping) for result in results]
 
 # Update communication event purpose (organization_user, person_user)
-async def update_communication_event_purpose(communication_event_purpose_id: int, communication_event_purpose: CommunicationEventPurposeUpdate, party_id: int) -> Optional[CommunicationEventPurposeOut]:
+async def update_communication_event_purpose(communication_event_purpose_id: int, communication_event_purpose: CommunicationEventPurposeUpdate, party_id: str) -> Optional[CommunicationEventPurposeOut]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Get current communication event purpose for history
             current_communication_event_purpose = await get_communication_event_purpose(communication_event_purpose_id, party_id)
             if not current_communication_event_purpose:
-                logger.warning(f"Communication event purpose not found for update: id={communication_event_purpose_id}, party_id={party_id}")
+                logger.warning(f"Communication event purpose not found for update: id={communication_event_purpose_id}, party_id={party_id_int}")
                 return None
 
             values = {"id": communication_event_purpose_id}
@@ -125,7 +134,7 @@ async def update_communication_event_purpose(communication_event_purpose_id: int
             # Verify updated record is accessible by party_id
             updated_communication_event_purpose = await get_communication_event_purpose(communication_event_purpose_id, party_id)
             if not updated_communication_event_purpose:
-                logger.warning(f"Updated communication event purpose not accessible: id={communication_event_purpose_id}, party_id={party_id}")
+                logger.warning(f"Updated communication event purpose not accessible: id={communication_event_purpose_id}, party_id={party_id_int}")
                 return None
 
             # Insert into communication_event_purpose_history
@@ -143,18 +152,23 @@ async def update_communication_event_purpose(communication_event_purpose_id: int
 
             logger.info(f"Updated communication event purpose: id={communication_event_purpose_id}")
             return CommunicationEventPurposeOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error updating communication event purpose: {str(e)}")
             raise
 
 # Delete communication event purpose (organization_user, person_user)
-async def delete_communication_event_purpose(communication_event_purpose_id: int, party_id: int) -> Optional[int]:
+async def delete_communication_event_purpose(communication_event_purpose_id: int, party_id: str) -> Optional[int]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Get current communication event purpose for history
             current_communication_event_purpose = await get_communication_event_purpose(communication_event_purpose_id, party_id)
             if not current_communication_event_purpose:
-                logger.warning(f"Communication event purpose not found for deletion: id={communication_event_purpose_id}, party_id={party_id}")
+                logger.warning(f"Communication event purpose not found for deletion: id={communication_event_purpose_id}, party_id={party_id_int}")
                 return None
 
             # Insert into communication_event_purpose_history
@@ -175,6 +189,9 @@ async def delete_communication_event_purpose(communication_event_purpose_id: int
             result = await database.fetch_one(query=query, values={"id": communication_event_purpose_id})
             logger.info(f"Deleted communication event purpose: id={communication_event_purpose_id}")
             return result["id"] if result else None
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error deleting communication event purpose: {str(e)}")
             raise

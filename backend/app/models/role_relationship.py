@@ -7,19 +7,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create a new role relationship (organization_user, person_user)
-async def create_role_relationship(role_relationship: RoleRelationshipCreate, from_party_role_id: int) -> Optional[RoleRelationshipOut]:
+async def create_role_relationship(role_relationship: RoleRelationshipCreate, from_party_role_id: str) -> Optional[RoleRelationshipOut]:
     async with database.transaction():
         try:
+            # Convert from_party_role_id to integer
+            from_party_role_id_int = int(from_party_role_id)
             # Verify from_party_role_id belongs to party_id
             query_check = """
                 SELECT id FROM party_role WHERE id = :from_party_role_id AND party_id = :party_id
             """
             result_check = await database.fetch_one(query=query_check, values={
-                "from_party_role_id": from_party_role_id,
-                "party_id": from_party_role_id
+                "from_party_role_id": from_party_role_id_int,
+                "party_id": from_party_role_id_int
             })
             if not result_check:
-                logger.warning(f"Invalid from_party_role_id={from_party_role_id}")
+                logger.warning(f"Invalid from_party_role_id={from_party_role_id_int}")
                 return None
 
             query = """
@@ -28,7 +30,7 @@ async def create_role_relationship(role_relationship: RoleRelationshipCreate, fr
                 RETURNING id, from_party_role_id, to_party_role_id, comment, relationship_type_id, priority_type_id, role_relationship_status_type_id, created_at, updated_at
             """
             values = role_relationship.dict()
-            values["from_party_role_id"] = from_party_role_id
+            values["from_party_role_id"] = from_party_role_id_int
             result = await database.fetch_one(query=query, values=values)
             if not result:
                 logger.warning(f"Failed to create role relationship")
@@ -47,24 +49,29 @@ async def create_role_relationship(role_relationship: RoleRelationshipCreate, fr
 
             logger.info(f"Created role relationship: id={result['id']}")
             return RoleRelationshipOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid from_party_role_id format: {str(e)}")
+            raise ValueError("Invalid from_party_role_id format")
         except Exception as e:
             logger.error(f"Error creating role relationship: {str(e)}")
             raise
 
 # Get role relationship by ID (organization_user, person_user)
-async def get_role_relationship(role_relationship_id: int, party_id: int) -> Optional[RoleRelationshipOut]:
+async def get_role_relationship(role_relationship_id: int, party_id: str) -> Optional[RoleRelationshipOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT rr.id, rr.from_party_role_id, rr.to_party_role_id, rr.comment, rr.relationship_type_id, rr.priority_type_id, rr.role_relationship_status_type_id, rr.created_at, rr.updated_at
         FROM role_relationship rr
         JOIN party_role pr ON pr.id = rr.from_party_role_id
         WHERE rr.id = :id AND pr.party_id = :party_id
     """
-    result = await database.fetch_one(query=query, values={"id": role_relationship_id, "party_id": party_id})
-    logger.info(f"Retrieved role relationship: id={role_relationship_id} for party_id={party_id}")
+    result = await database.fetch_one(query=query, values={"id": role_relationship_id, "party_id": party_id_int})
+    logger.info(f"Retrieved role relationship: id={role_relationship_id} for party_id={party_id_int}")
     return RoleRelationshipOut(**result._mapping) if result else None
 
 # Get all role relationships for a party (organization_user, person_user)
-async def get_all_role_relationships(party_id: int) -> List[RoleRelationshipOut]:
+async def get_all_role_relationships(party_id: str) -> List[RoleRelationshipOut]:
+    party_id_int = int(party_id)
     query = """
         SELECT rr.id, rr.from_party_role_id, rr.to_party_role_id, rr.comment, rr.relationship_type_id, rr.priority_type_id, rr.role_relationship_status_type_id, rr.created_at, rr.updated_at
         FROM role_relationship rr
@@ -72,18 +79,20 @@ async def get_all_role_relationships(party_id: int) -> List[RoleRelationshipOut]
         WHERE pr.party_id = :party_id
         ORDER BY rr.id ASC
     """
-    results = await database.fetch_all(query=query, values={"party_id": party_id})
-    logger.info(f"Retrieved {len(results)} role relationships for party_id={party_id}")
+    results = await database.fetch_all(query=query, values={"party_id": party_id_int})
+    logger.info(f"Retrieved {len(results)} role relationships for party_id={party_id_int}")
     return [RoleRelationshipOut(**result._mapping) for result in results]
 
 # Update role relationship (organization_user, person_user)
-async def update_role_relationship(role_relationship_id: int, role_relationship: RoleRelationshipUpdate, from_party_role_id: int) -> Optional[RoleRelationshipOut]:
+async def update_role_relationship(role_relationship_id: int, role_relationship: RoleRelationshipUpdate, from_party_role_id: str) -> Optional[RoleRelationshipOut]:
     async with database.transaction():
         try:
+            # Convert from_party_role_id to integer
+            from_party_role_id_int = int(from_party_role_id)
             # Get current role relationship for history
             current_role_relationship = await get_role_relationship(role_relationship_id, from_party_role_id)
             if not current_role_relationship:
-                logger.warning(f"Role relationship not found for update: id={role_relationship_id}, from_party_role_id={from_party_role_id}")
+                logger.warning(f"Role relationship not found for update: id={role_relationship_id}, from_party_role_id={from_party_role_id_int}")
                 return None
 
             # Verify from_party_role_id belongs to party_id
@@ -91,11 +100,11 @@ async def update_role_relationship(role_relationship_id: int, role_relationship:
                 SELECT id FROM party_role WHERE id = :from_party_role_id AND party_id = :party_id
             """
             result_check = await database.fetch_one(query=query_check, values={
-                "from_party_role_id": from_party_role_id,
-                "party_id": from_party_role_id
+                "from_party_role_id": from_party_role_id_int,
+                "party_id": from_party_role_id_int
             })
             if not result_check:
-                logger.warning(f"Invalid from_party_role_id={from_party_role_id}")
+                logger.warning(f"Invalid from_party_role_id={from_party_role_id_int}")
                 return None
 
             values = {"id": role_relationship_id}
@@ -137,7 +146,7 @@ async def update_role_relationship(role_relationship_id: int, role_relationship:
             # Verify updated record is accessible by from_party_role_id
             updated_role_relationship = await get_role_relationship(role_relationship_id, from_party_role_id)
             if not updated_role_relationship:
-                logger.warning(f"Updated role relationship not accessible: id={role_relationship_id}, from_party_role_id={from_party_role_id}")
+                logger.warning(f"Updated role relationship not accessible: id={role_relationship_id}, from_party_role_id={from_party_role_id_int}")
                 return None
 
             # Insert into role_relationship_history
@@ -158,18 +167,23 @@ async def update_role_relationship(role_relationship_id: int, role_relationship:
 
             logger.info(f"Updated role relationship: id={role_relationship_id}")
             return RoleRelationshipOut(**result._mapping)
+        except ValueError as e:
+            logger.error(f"Invalid from_party_role_id format: {str(e)}")
+            raise ValueError("Invalid from_party_role_id format")
         except Exception as e:
             logger.error(f"Error updating role relationship: {str(e)}")
             raise
 
 # Delete role relationship (organization_user, person_user)
-async def delete_role_relationship(role_relationship_id: int, party_id: int) -> Optional[int]:
+async def delete_role_relationship(role_relationship_id: int, party_id: str) -> Optional[int]:
     async with database.transaction():
         try:
+            # Convert party_id to integer
+            party_id_int = int(party_id)
             # Get current role relationship for history
             current_role_relationship = await get_role_relationship(role_relationship_id, party_id)
             if not current_role_relationship:
-                logger.warning(f"Role relationship not found for deletion: id={role_relationship_id}, party_id={party_id}")
+                logger.warning(f"Role relationship not found for deletion: id={role_relationship_id}, party_id={party_id_int}")
                 return None
 
             # Insert into role_relationship_history
@@ -193,6 +207,9 @@ async def delete_role_relationship(role_relationship_id: int, party_id: int) -> 
             result = await database.fetch_one(query=query, values={"id": role_relationship_id})
             logger.info(f"Deleted role relationship: id={role_relationship_id}")
             return result["id"] if result else None
+        except ValueError as e:
+            logger.error(f"Invalid party_id format: {str(e)}")
+            raise ValueError("Invalid party_id format")
         except Exception as e:
             logger.error(f"Error deleting role relationship: {str(e)}")
             raise

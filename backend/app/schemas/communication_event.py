@@ -5,8 +5,8 @@ from datetime import datetime
 # Schema for creating a communication event
 class CommunicationEventCreate(BaseModel):
     note: Optional[str] = None
-    role_relationship_id: int
-    contact_mechanism_type_id: int
+    role_relationship_id: Optional[int] = None
+    contact_mechanism_type_id: Optional[int] = None
     communication_event_status_type_id: Optional[int] = None
 
 # Schema for updating a communication event

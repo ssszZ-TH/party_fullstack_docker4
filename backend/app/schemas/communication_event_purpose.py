@@ -5,8 +5,8 @@ from datetime import datetime
 # Schema for creating a communication event purpose
 class CommunicationEventPurposeCreate(BaseModel):
     note: Optional[str] = None
-    communication_event_id: int
-    communication_event_purpose_type_id: int
+    communication_event_id: Optional[int] = None
+    communication_event_purpose_type_id: Optional[int] = None
 
 # Schema for updating a communication event purpose
 class CommunicationEventPurposeUpdate(BaseModel):
