@@ -23,6 +23,13 @@ from app.controllers.contact_mechanism_type import router as contact_mechanism_t
 from app.controllers.communication_event_status_type import router as communication_event_status_type_router
 from app.controllers.communication_event_purpose_type import router as communication_event_purpose_type_router
 from app.controllers.passport import router as passport_router
+from app.controllers.person_history import router as person_history_router
+from app.controllers.organization_history import router as organization_history_router
+from app.controllers.passport_history import router as passport_history_router
+from app.controllers.party_role_history import router as party_role_history_router
+from app.controllers.role_relationship_history import router as role_relationship_history_router
+from app.controllers.communication_event_history import router as communication_event_history_router
+from app.controllers.communication_event_purpose_history import router as communication_event_purpose_history_router
 
 load_dotenv()
 
@@ -68,6 +75,13 @@ app.include_router(contact_mechanism_type_router)
 app.include_router(communication_event_status_type_router)
 app.include_router(communication_event_purpose_type_router)
 app.include_router(passport_router)
+app.include_router(person_history_router)
+app.include_router(organization_history_router)
+app.include_router(passport_history_router)
+app.include_router(party_role_history_router)
+app.include_router(role_relationship_history_router)
+app.include_router(communication_event_history_router)
+app.include_router(communication_event_purpose_history_router)
 
 @app.get("/")
 async def root():
