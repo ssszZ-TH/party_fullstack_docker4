@@ -136,7 +136,7 @@ async def update_organization(organization_id: int, organization: OrganizationUp
             logger.error(f"Error updating organization: {str(e)}")
             raise
 
-# Delete organization, deletes party automatically via ON DELETE CASCADE
+# Delete organization, deletes party explicitly to ensure no dangling party records
 # Role: organization_admin
 async def delete_organization(organization_id: int) -> Optional[int]:
     async with database.transaction():
@@ -146,6 +146,7 @@ async def delete_organization(organization_id: int) -> Optional[int]:
             if not organization:
                 logger.warning(f"Organization not found for deletion: id={organization_id}")
                 return None
+
             # Log deletion history before actual deletion
             await log_organization_history(organization_id, {
                 "federal_tax_id": organization.federal_tax_id,
@@ -157,11 +158,20 @@ async def delete_organization(organization_id: int) -> Optional[int]:
                 "username": organization.username,
                 "comment": organization.comment
             }, "delete")
-            # Perform deletion (party table deleted via ON DELETE CASCADE)
-            query = "DELETE FROM organizations WHERE id = :id RETURNING id"
-            result = await database.fetch_one(query=query, values={"id": organization_id})
-            logger.info(f"Deleted organization: id={organization_id}")
-            return result["id"] if result else None
+
+            # Explicitly delete from party table to avoid dangling records
+            query_party = "DELETE FROM party WHERE id = :id RETURNING id"
+            result_party = await database.fetch_one(query=query_party, values={"id": organization_id})
+            if not result_party:
+                logger.warning(f"Party not found for deletion: id={organization_id}")
+                return None
+
+            # Perform deletion from organizations table
+            query_organization = "DELETE FROM organizations WHERE id = :id RETURNING id"
+            result_organization = await database.fetch_one(query=query_organization, values={"id": organization_id})
+            
+            logger.info(f"Deleted organization and party: id={organization_id}")
+            return result_organization["id"] if result_organization else None
         except Exception as e:
             logger.error(f"Error deleting organization: {str(e)}")
             raise

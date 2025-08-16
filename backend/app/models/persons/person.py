@@ -170,7 +170,7 @@ async def update_person(person_id: int, person: PersonUpdate) -> Optional[Person
             logger.error(f"Error updating person: {str(e)}")
             raise
 
-# Delete person, deletes party automatically via ON DELETE CASCADE
+# Delete person, deletes party explicitly to ensure no dangling party records
 # Role: hr_admin
 async def delete_person(person_id: int) -> Optional[int]:
     async with database.transaction():
@@ -180,6 +180,7 @@ async def delete_person(person_id: int) -> Optional[int]:
             if not person:
                 logger.warning(f"Person not found for deletion: id={person_id}")
                 return None
+
             # Log deletion history before actual deletion
             await log_person_history(person_id, {
                 "username": person.username,
@@ -198,15 +199,23 @@ async def delete_person(person_id: int) -> Optional[int]:
                 "income_range_id": person.income_range_id,
                 "comment": person.comment
             }, "delete")
-            # Perform deletion (party table deleted via ON DELETE CASCADE)
-            query = "DELETE FROM persons WHERE id = :id RETURNING id"
-            result = await database.fetch_one(query=query, values={"id": person_id})
-            logger.info(f"Deleted person: id={person_id}")
-            return result["id"] if result else None
+
+            # Explicitly delete from party table to avoid dangling records
+            query_party = "DELETE FROM party WHERE id = :id RETURNING id"
+            result_party = await database.fetch_one(query=query_party, values={"id": person_id})
+            if not result_party:
+                logger.warning(f"Party not found for deletion: id={person_id}")
+                return None
+
+            # Perform deletion from persons table
+            query_person = "DELETE FROM persons WHERE id = :id RETURNING id"
+            result_person = await database.fetch_one(query=query_person, values={"id": person_id})
+            
+            logger.info(f"Deleted person and party: id={person_id}")
+            return result_person["id"] if result_person else None
         except Exception as e:
             logger.error(f"Error deleting person: {str(e)}")
             raise
-
 # Log person history
 # Role: hr_admin
 async def log_person_history(person_id: int, data: dict, action: str):

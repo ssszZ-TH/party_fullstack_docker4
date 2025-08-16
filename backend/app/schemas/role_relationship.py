@@ -12,7 +12,6 @@ class RoleRelationshipCreate(BaseModel):
 
 # Schema for updating a role relationship
 class RoleRelationshipUpdate(BaseModel):
-    to_party_role_id: Optional[int] = None
     comment: Optional[str] = None
     relationship_type_id: Optional[int] = None
     priority_type_id: Optional[int] = None

@@ -18,7 +18,7 @@ async def create_role_relationship_endpoint(role_relationship: RoleRelationshipC
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization or person user access required")
     result = await create_role_relationship(role_relationship, current_user["id"])
     if not result:
-        logger.warning(f"Failed to create role relationship for from_party_role_id={current_user['id']}")
+        logger.warning(f"Failed to create role relationship for party_id={current_user['id']}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create role relationship")
     return result
 
@@ -50,7 +50,7 @@ async def update_role_relationship_endpoint(role_relationship_id: int, role_rela
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization or person user access required")
     result = await update_role_relationship(role_relationship_id, role_relationship, current_user["id"])
     if not result:
-        logger.warning(f"Role relationship not found or no changes made: id={role_relationship_id}, from_party_role_id={current_user['id']}")
+        logger.warning(f"Role relationship not found or no changes made: id={role_relationship_id}, party_id={current_user['id']}")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role relationship not found or no changes made")
     return result
 

@@ -100,7 +100,8 @@ Base URL: `{{backend}}/`
    - **JSON Body**:
      ```json
      {
-         "to_party_role_id": {{to_party_role_id}},
+         "to_party_role_id": {{to_party_role_id}}, <-- removed due to security reasons
+         
          "comment": "Updated relationship",
          "relationship_type_id": {{relationship_type_id}},
          "priority_type_id": {{priority_type_id}},
