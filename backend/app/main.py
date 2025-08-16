@@ -30,6 +30,10 @@ from app.controllers.party_role_history import router as party_role_history_rout
 from app.controllers.role_relationship_history import router as role_relationship_history_router
 from app.controllers.communication_event_history import router as communication_event_history_router
 from app.controllers.communication_event_purpose_history import router as communication_event_purpose_history_router
+from app.controllers.party_role import router as party_role_router
+from app.controllers.role_relationship import router as role_relationship_router
+from app.controllers.communication_event import router as communication_event_router
+from app.controllers.communication_event_purpose import router as communication_event_purpose_router
 
 load_dotenv()
 
@@ -82,6 +86,10 @@ app.include_router(party_role_history_router)
 app.include_router(role_relationship_history_router)
 app.include_router(communication_event_history_router)
 app.include_router(communication_event_purpose_history_router)
+app.include_router(party_role_router)
+app.include_router(role_relationship_router)
+app.include_router(communication_event_router)
+app.include_router(communication_event_purpose_router)
 
 @app.get("/")
 async def root():

@@ -4,7 +4,6 @@ from datetime import datetime
 
 # Schema for creating a role relationship
 class RoleRelationshipCreate(BaseModel):
-    from_party_role_id: int
     to_party_role_id: int
     comment: Optional[str] = None
     relationship_type_id: int
@@ -13,7 +12,6 @@ class RoleRelationshipCreate(BaseModel):
 
 # Schema for updating a role relationship
 class RoleRelationshipUpdate(BaseModel):
-    from_party_role_id: Optional[int] = None
     to_party_role_id: Optional[int] = None
     comment: Optional[str] = None
     relationship_type_id: Optional[int] = None
