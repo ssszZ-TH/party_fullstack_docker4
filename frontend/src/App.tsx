@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
@@ -6,10 +6,22 @@ import './App.css'
 function App() {
   const [count, setCount] = useState(0)
 
+  useEffect(() => {
+    setTimeout(() => {
+      fetch('http://172.0.0.1:8080/')
+        .then((response) => response.json())
+        .then((data) => console.log(data.message))
+        .catch((error) => {
+          console.error('Error fetching API:', error);
+          console.log('Failed to fetch message');
+        });
+    }, 2000); // หน่วง 2 วินาที
+  }, []);
+
   return (
     <>
       <div>
-        <a href="https://vite.dev" target="_blank">
+        <a href="https://vitejs.dev" target="_blank">
           <img src={viteLogo} className="logo" alt="Vite logo" />
         </a>
         <a href="https://react.dev" target="_blank">
