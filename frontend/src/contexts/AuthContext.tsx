@@ -14,6 +14,9 @@ interface AuthContextType {
     | null;
   login: (token: string) => void;
   logout: () => void;
+  setIsAuthenticated: (value: boolean) => void;
+  setRole: (role: string | null) => void;
+  setUser: (user: AuthContextType['user']) => void;
 }
 
 export const AuthContext = createContext<AuthContextType>({
@@ -22,6 +25,9 @@ export const AuthContext = createContext<AuthContextType>({
   user: null,
   login: () => {},
   logout: () => {},
+  setIsAuthenticated: () => {},
+  setRole: () => {},
+  setUser: () => {},
 });
 
 // คอมโพเนนต์ AuthProvider
@@ -35,20 +41,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchUserData = async (token: string) => {
     try {
       let res;
-      // ลองเรียก API ตาม role ที่เป็นไปได้
+      let userRole;
       try {
         res = await getAdminProfile();
-        setRole(res.role);
+        userRole = res.role;
       } catch (adminError) {
         try {
           res = await getPersonProfile();
-          setRole('person_user');
+          userRole = 'person_user';
         } catch (personError) {
           res = await getOrganizationProfile();
-          setRole('organization_user');
+          userRole = 'organization_user';
         }
       }
       setUser(res);
+      setRole(userRole);
       setIsAuthenticated(true);
       console.log('AuthContext: User data fetched:', res);
     } catch (error) {
@@ -74,7 +81,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ฟังก์ชัน login เพื่อเก็บ token และดึงข้อมูลผู้ใช้
   const login = (token: string) => {
-    // เก็บ token ใน cookie โดยกำหนด expires เป็น 7 วัน
     Cookies.set('access_token', token, { expires: 7, secure: true, sameSite: 'strict' });
     fetchUserData(token);
   };
@@ -89,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, role, user, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, role, user, login, logout, setIsAuthenticated, setRole, setUser }}>
       {children}
     </AuthContext.Provider>
   );
