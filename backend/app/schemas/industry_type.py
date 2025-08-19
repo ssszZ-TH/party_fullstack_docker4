@@ -1,12 +1,12 @@
 from pydantic import BaseModel
 from typing import Optional
 
-# Schema for creating industry type
+# Schema for creating an industry type
 class IndustryTypeCreate(BaseModel):
     naisc: str
     description: str
 
-# Schema for updating industry type
+# Schema for updating an industry type
 class IndustryTypeUpdate(BaseModel):
     naisc: Optional[str] = None
     description: Optional[str] = None
