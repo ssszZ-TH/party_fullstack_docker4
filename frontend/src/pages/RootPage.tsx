@@ -1,7 +1,8 @@
-import React, { useContext, useEffect, useRef } from "react";
+import { useContext, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../contexts/AuthContext";
 import Cookies from 'js-cookie';
+import { getCurrentRole } from "../services/auth";
 import { getAdminProfile, getPersonProfile, getOrganizationProfile } from "../services/profile";
 
 // RootPage สำหรับตรวจสอบ role และ redirect ไปหน้า home ตาม role
@@ -18,27 +19,41 @@ export default function RootPage() {
 
       const token = Cookies.get('access_token');
 
-      // ถ้ามี token ให้ตรวจสอบความถูกต้อง
+      // ถ้ามี token ให้ตรวจสอบความถูกต้องโดยใช้ /currentrole
       if (token) {
         try {
+          const userRole = await getCurrentRole();
           let userData;
-          let userRole;
-          try {
+          if (['system_admin', 'basetype_admin', 'hr_admin', 'organization_admin'].includes(userRole)) {
             userData = await getAdminProfile();
-            userRole = userData.role;
-          } catch (adminError) {
-            try {
-              userData = await getPersonProfile();
-              userRole = 'person_user';
-            } catch (personError) {
-              userData = await getOrganizationProfile();
-              userRole = 'organization_user';
-            }
+          } else if (userRole === 'person_user') {
+            userData = await getPersonProfile();
+          } else if (userRole === 'organization_user') {
+            userData = await getOrganizationProfile();
+          } else {
+            throw new Error('Invalid role');
           }
           // อัปเดต state ใน AuthContext
           setIsAuthenticated(true);
           setRole(userRole);
           setUser(userData);
+
+          // Redirect ตาม role
+          if (userRole === "system_admin") {
+            navigate("/homes/system_admin", { replace: true });
+          } else if (userRole === "basetype_admin") {
+            navigate("/homes/basetype_admin", { replace: true });
+          } else if (userRole === "hr_admin") {
+            navigate("/homes/hr_admin", { replace: true });
+          } else if (userRole === "organization_admin") {
+            navigate("/homes/organization_admin", { replace: true });
+          } else if (userRole === "organization_user") {
+            navigate("/homes/organization_user", { replace: true });
+          } else if (userRole === "person_user") {
+            navigate("/homes/person_user", { replace: true });
+          } else {
+            throw new Error('Invalid role');
+          }
         } catch (error) {
           console.error('Failed to fetch user data:', error);
           Cookies.remove('access_token');
@@ -55,27 +70,6 @@ export default function RootPage() {
         setRole(null);
         setUser(null);
         navigate("/login/person", { replace: true });
-        isChecking.current = false;
-        return;
-      }
-
-      // Redirect ตาม role
-      if (role === "system_admin") {
-        navigate("/homes/system_admin", { replace: true });
-      } else if (role === "basetype_admin") {
-        navigate("/homes/basetype_admin", { replace: true });
-      } else if (role === "hr_admin") {
-        navigate("/homes/hr_admin", { replace: true });
-      } else if (role === "organization_admin") {
-        navigate("/homes/organization_admin", { replace: true });
-      } else if (role === "organization_user") {
-        navigate("/homes/organization_user", { replace: true });
-      } else if (role === "person_user") {
-        navigate("/homes/person_user", { replace: true });
-      } else {
-        // ถ้า role ยังไม่ถูกตั้งค่า รอการอัปเดตจาก API
-        isChecking.current = false;
-        return;
       }
 
       isChecking.current = false;

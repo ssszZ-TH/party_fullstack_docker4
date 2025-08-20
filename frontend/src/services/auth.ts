@@ -66,3 +66,23 @@ export async function organizationLogin({ username, password }: { username: stri
     throw new Error(error.response?.data?.message || 'Login failed');
   }
 }
+
+// ดึง role ปัจจุบันจาก token
+export async function getCurrentRole() {
+  const token = Cookies.get('access_token');
+  if (!token) {
+    throw new Error('No access token found');
+  }
+  try {
+    const res = await axios.get(`${BASE_URL}/currentrole`, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+    return res.data.role;
+  } catch (error: any) {
+    logError('getCurrentRole', error);
+    throw new Error(error.response?.data?.message || 'Failed to fetch current role');
+  }
+}

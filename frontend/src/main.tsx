@@ -20,6 +20,10 @@ const PersonUserHome = lazy(() => import("./pages/homes/PersonUserHome"));
 const OrganizationUserHome = lazy(() => import("./pages/homes/OrganizationUserHome"));
 const PersonDetail = lazy(() => import("./pages/layer_info/PersonDetail"));
 const PassportByCitizenshipId = lazy(() => import("./pages/layer_info/PassportByCitizenshipId"));
+const SystemAdminProfile = lazy(() => import("./pages/profiles/SystemAdminProfile"));
+const BasetypeAdminProfile = lazy(() => import("./pages/profiles/BasetypeAdminProfile"));
+const HrAdminProfile = lazy(() => import("./pages/profiles/HrAdminProfile"));
+const OrganizationAdminProfile = lazy(() => import("./pages/profiles/OrganizationAdminProfile"));
 
 // กำหนด array ของ routes สำหรับหน้าเพิ่มเติม
 const routes = [
@@ -89,6 +93,10 @@ const routes = [
   { path: "/v1/communicationevent/:paramId", component: lazy(() => import("./pages/layer_commu_event/CommunicationEventDetail")) },
   { path: "/v1/communicationeventpurpose/", component: lazy(() => import("./pages/layer_commu_purpose/CommunicationEventPurpose")) },
   { path: "/v1/communicationeventpurpose/:paramId", component: lazy(() => import("./pages/layer_commu_purpose/CommunicationEventPurposeDetail")) },
+  { path: "/profiles/system_admin", component: SystemAdminProfile },
+  { path: "/profiles/basetype_admin", component: BasetypeAdminProfile },
+  { path: "/profiles/hr_admin", component: HrAdminProfile },
+  { path: "/profiles/organization_admin", component: OrganizationAdminProfile },
 ];
 
 // Render แอปพลิเคชัน

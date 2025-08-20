@@ -45,7 +45,7 @@ const services = [
 
 // Navigation items
 const navItems = [
-  { name: "Profile", icon: <PersonIcon />, path: "/v1/profile" },
+  { name: "Profile", icon: <PersonIcon />, path: "/profiles/system_admin" },
   { name: "Settings", icon: <SettingsIcon />, path: "/v1/settings" },
   { name: "About", icon: <AboutIcon />, path: "/v1/about" },
   { name: "Database", icon: <DatabaseIcon />, path: "/v1/database" },
@@ -63,7 +63,7 @@ export default function SystemAdminHome() {
       // ตรวจสอบว่า isAuthenticated และ role ถูกต้อง
       if (!isAuthenticated || role !== "system_admin") {
         logout();
-        navigate("/admin-login", { replace: true });
+        navigate("/login/admin", { replace: true });
         return;
       }
 
@@ -72,7 +72,7 @@ export default function SystemAdminHome() {
       if (!token) {
         console.error('No access token found in cookies');
         logout();
-        navigate("/admin-login", { replace: true });
+        navigate("/login/admin", { replace: true });
         return;
       }
 
@@ -81,7 +81,7 @@ export default function SystemAdminHome() {
       } catch (err: any) {
         console.error('Token validation failed:', err.message);
         logout();
-        navigate("/admin-login", { replace: true });
+        navigate("/login/admin", { replace: true });
       }
     };
     checkTokenValidity();
