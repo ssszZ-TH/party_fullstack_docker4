@@ -12,7 +12,7 @@ interface AuthContextType {
     | { id: number; username: string; personal_id_number: string; first_name: string; middle_name: string | null; last_name: string; nick_name: string | null; birth_date: string; gender_type_id: number | null; marital_status_type_id: number | null; country_id: number | null; height: number; weight: number; ethnicity_type_id: number | null; income_range_id: number | null; comment: string; created_at: string; updated_at: string | null }
     | { id: number; federal_tax_id: string; name_en: string; name_th: string; organization_type_id: number | null; industry_type_id: number | null; employee_count_range_id: number | null; username: string; comment: string; created_at: string; updated_at: string | null }
     | null;
-  login: (token: string) => void;
+  login: (token: string, role: string) => void;
   logout: () => void;
   setIsAuthenticated: (value: boolean) => void;
   setRole: (role: string | null) => void;
@@ -38,21 +38,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AuthContextType['user']>(null);
 
   // ฟังก์ชันดึงข้อมูลผู้ใช้ตาม role
-  const fetchUserData = async (token: string) => {
+  const fetchUserData = async (token: string, userRole: string) => {
     try {
       let res;
-      let userRole;
-      try {
+      if (userRole === 'person_user') {
+        res = await getPersonProfile();
+      } else if (userRole === 'organization_user') {
+        res = await getOrganizationProfile();
+      } else {
         res = await getAdminProfile();
-        userRole = res.role;
-      } catch (adminError) {
-        try {
-          res = await getPersonProfile();
-          userRole = 'person_user';
-        } catch (personError) {
-          res = await getOrganizationProfile();
-          userRole = 'organization_user';
-        }
       }
       setUser(res);
       setRole(userRole);
@@ -70,19 +64,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ตรวจสอบ token เมื่อ component mount
   useEffect(() => {
     const token = Cookies.get('access_token');
-    if (token) {
-      fetchUserData(token);
+    if (token && role) {
+      fetchUserData(token, role);
     } else {
       setUser(null);
       setRole(null);
       setIsAuthenticated(false);
     }
-  }, []);
+  }, [role]);
 
-  // ฟังก์ชัน login เพื่อเก็บ token และดึงข้อมูลผู้ใช้
-  const login = (token: string) => {
+  // ฟังก์ชัน login เพื่อเก็บ token และกำหนด role
+  const login = (token: string, userRole: string) => {
     Cookies.set('access_token', token, { expires: 7, secure: true, sameSite: 'strict' });
-    fetchUserData(token);
+    fetchUserData(token, userRole);
   };
 
   // ฟังก์ชัน logout เพื่อลบ token และรีเซ็ตสถานะ

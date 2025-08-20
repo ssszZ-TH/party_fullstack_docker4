@@ -19,16 +19,16 @@ import {
   School as TutorialIcon,
 } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
-import { AuthContext } from "../../contexts/AuthContext";
-import { getPersonProfile } from "../../services/profile";
+import { AuthContext } from '../../contexts/AuthContext';
+import { getPersonProfile } from '../../services/profile';
 import Cookies from 'js-cookie';
 
-// Services data for person_user
+// ข้อมูล services สำหรับ person_user เพื่อแสดงเมนูในหน้า home
 const services = [
   {
     title: "Personal Information",
     items: [
-      { name: "My Profile", path: "/v1/person/me" },
+      { name: "My Profile", path: "/profiles/person_user" },
       { name: "Update Personal Details", path: "/v1/person/update" },
       { name: "Passport Details", path: "/v1/passport" },
       { name: "Citizenship", path: "/v1/citizenship" },
@@ -37,9 +37,9 @@ const services = [
   },
 ];
 
-// Navigation items
+// รายการ navigation items สำหรับ sidebar
 const navItems = [
-  { name: "Profile", icon: <PersonIcon />, path: "/v1/profile" },
+  { name: "Profile", icon: <PersonIcon />, path: "/profiles/person_user" },
   { name: "Settings", icon: <SettingsIcon />, path: "/v1/settings" },
   { name: "About", icon: <AboutIcon />, path: "/v1/about" },
   { name: "Tutorial", icon: <TutorialIcon />, path: "/v1/tutorial" },
@@ -50,7 +50,8 @@ export default function PersonUserHome() {
   const navigate = useNavigate();
   const theme = useTheme();
 
-  // ตรวจสอบ token และ role
+  // useEffect สำหรับตรวจสอบความถูกต้องของ token และ role
+  // ถ้าไม่ผ่านการตรวจสอบจะ logout และ redirect ไปหน้า login
   useEffect(() => {
     const checkTokenValidity = async () => {
       const token = Cookies.get('access_token');
@@ -70,7 +71,7 @@ export default function PersonUserHome() {
     checkTokenValidity();
   }, [logout, navigate, isAuthenticated, role]);
 
-  // แสดง grid ของ services
+  // ฟังก์ชันสำหรับแสดง grid ของ services ในหน้า home
   const renderServiceGrid = (serviceItems: { name: string; path: string }[]) => (
     <Box
       sx={{

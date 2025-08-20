@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -16,7 +16,8 @@ import Cookies from 'js-cookie';
 import { AuthContext } from '../../contexts/AuthContext';
 import { organizationLogin } from '../../services/auth';
 
-// Style for Paper component to ensure a clean and responsive design
+// สไตล์สำหรับ Paper component เพื่อกำหนดลักษณะการแสดงผลของฟอร์ม login
+// รองรับการ responsive สำหรับหน้าจอขนาดเล็ก
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
   marginTop: theme.spacing(8),
@@ -30,7 +31,7 @@ const StyledPaper = styled(Paper)(({ theme }) => ({
 }));
 
 const OrganizationLogin: React.FC = () => {
-  // State for managing form
+  // State สำหรับจัดการข้อมูลฟอร์มและสถานะการทำงาน
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -39,14 +40,16 @@ const OrganizationLogin: React.FC = () => {
   const navigate = useNavigate();
   const { login, isAuthenticated, role } = useContext(AuthContext);
 
-  // Redirect based on role after login
-  React.useEffect(() => {
+  // useEffect สำหรับตรวจสอบสถานะการ login และ role หลังจาก login สำเร็จ
+  // ถ้า isAuthenticated เป็น true และ role เป็น organization_user จะ redirect ไปหน้า home
+  useEffect(() => {
     if (isAuthenticated && role === 'organization_user') {
       navigate('/homes/organization_user', { replace: true });
     }
   }, [isAuthenticated, role, navigate]);
 
-  // Handle form submission
+  // ฟังก์ชันสำหรับจัดการการ submit ฟอร์ม login
+  // เรียก API organizationLogin และบันทึก token ลงใน Cookies
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -55,7 +58,7 @@ const OrganizationLogin: React.FC = () => {
     try {
       const { access_token } = await organizationLogin({ username, password });
       Cookies.set('access_token', access_token, { expires: 7, secure: true, sameSite: 'strict' });
-      login(access_token);
+      login(access_token, 'organization_user');
     } catch (err: any) {
       setError(err.message || 'Login failed');
     } finally {
@@ -63,7 +66,7 @@ const OrganizationLogin: React.FC = () => {
     }
   };
 
-  // Redirect to other login pages
+  // ฟังก์ชันสำหรับเปลี่ยนเส้นทางไปยังหน้า login อื่นๆ
   const handleAdminLoginRedirect = () => {
     navigate('/login/admin');
   };

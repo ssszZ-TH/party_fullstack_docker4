@@ -19,16 +19,16 @@ import {
   School as TutorialIcon,
 } from "@mui/icons-material";
 import { useTheme } from "@mui/material/styles";
-import { AuthContext } from "../../contexts/AuthContext";
-import { getOrganizationProfile } from "../../services/profile";
+import { AuthContext } from '../../contexts/AuthContext';
+import { getOrganizationProfile } from '../../services/profile';
 import Cookies from 'js-cookie';
 
-// Services data for organization_user
+// ข้อมูล services สำหรับ organization_user เพื่อแสดงเมนูในหน้า home
 const services = [
   {
     title: "Organization Information",
     items: [
-      { name: "My Organization", path: "/v1/organization/me" },
+      { name: "My Organization", path: "/profiles/organization_user" },
       { name: "Update Organization Details", path: "/v1/organization/update" },
       { name: "Industry Classification", path: "/v1/classifybyindustry" },
       { name: "Employee Count Range", path: "/v1/employeecountrange" },
@@ -36,9 +36,9 @@ const services = [
   },
 ];
 
-// Navigation items
+// รายการ navigation items สำหรับ sidebar
 const navItems = [
-  { name: "Profile", icon: <PersonIcon />, path: "/v1/profile" },
+  { name: "Profile", icon: <PersonIcon />, path: "/profiles/organization_user" },
   { name: "Settings", icon: <SettingsIcon />, path: "/v1/settings" },
   { name: "About", icon: <AboutIcon />, path: "/v1/about" },
   { name: "Tutorial", icon: <TutorialIcon />, path: "/v1/tutorial" },
@@ -49,7 +49,8 @@ export default function OrganizationUserHome() {
   const navigate = useNavigate();
   const theme = useTheme();
 
-  // ตรวจสอบ token และ role
+  // useEffect สำหรับตรวจสอบความถูกต้องของ token และ role
+  // ถ้าไม่ผ่านการตรวจสอบจะ logout และ redirect ไปหน้า login
   useEffect(() => {
     const checkTokenValidity = async () => {
       const token = Cookies.get('access_token');
@@ -69,7 +70,7 @@ export default function OrganizationUserHome() {
     checkTokenValidity();
   }, [logout, navigate, isAuthenticated, role]);
 
-  // แสดง grid ของ services
+  // ฟังก์ชันสำหรับแสดง grid ของ services ในหน้า home
   const renderServiceGrid = (serviceItems: { name: string; path: string }[]) => (
     <Box
       sx={{
