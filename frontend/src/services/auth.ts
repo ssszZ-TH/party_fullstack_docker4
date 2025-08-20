@@ -1,88 +1,58 @@
 import axios from 'axios';
-import Cookies from 'js-cookie';
 
-const BASE_URL = 'http://localhost:8080';
+// กำหนด URL ของ backend
+const BACKEND_URL = 'http://localhost:8080';
 
-// บันทึก error สำหรับ debug
-const logError = (method: string, error: any) => {
-  console.error(`Error in ${method} request to ${BASE_URL}:`, {
-    message: error.message,
-    status: error.response?.status,
-    data: error.response?.data,
-  });
+// อินเทอร์เฟซสำหรับข้อมูลที่ใช้ในการ login
+interface AdminLoginData {
+  email: string;
+  password: string;
+}
+
+interface PersonLoginData {
+  username: string;
+  password: string;
+}
+
+interface OrganizationLoginData {
+  username: string;
+  password: string;
+}
+
+// ฟังก์ชันสำหรับ admin login
+export const adminLogin = async (data: AdminLoginData) => {
+  const response = await axios.post(`${BACKEND_URL}/auth/login`, data);
+  return {
+    access_token: response.data.access_token,
+    role: response.data.role || 'system_admin', // สมมติว่า API ส่ง role ใน token หรือกำหนด default
+  };
 };
 
-// สมัครสมาชิก admin
-export async function register({ name, email, password, role }: { name: string; email: string; password: string; role: string }) {
-  try {
-    const res = await axios.post(`${BASE_URL}/auth/register`, { name, email, password, role }, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    return res.data;
-  } catch (error: any) {
-    logError('register', error);
-    throw new Error(error.response?.data?.message || 'Registration failed');
-  }
-}
+// ฟังก์ชันสำหรับ person login
+export const personLogin = async (data: PersonLoginData) => {
+  const response = await axios.post(`${BACKEND_URL}/persons/login`, data);
+  return {
+    access_token: response.data.access_token,
+    role: response.data.role || 'person_user', // สมมติว่า API ส่ง role ใน token หรือกำหนด default
+  };
+};
 
-// ล็อกอินสำหรับ admin
-export async function adminLogin({ email, password }: { email: string; password: string }) {
-  try {
-    const res = await axios.post(`${BASE_URL}/auth/login`, { email, password }, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    Cookies.set('access_token', res.data.access_token, { expires: 7, secure: true, sameSite: 'strict' });
-    return res.data;
-  } catch (error: any) {
-    logError('adminLogin', error);
-    throw new Error(error.response?.data?.message || 'Login failed');
-  }
-}
+// ฟังก์ชันสำหรับ organization login
+export const organizationLogin = async (data: OrganizationLoginData) => {
+  const response = await axios.post(`${BACKEND_URL}/organizations/login`, data);
+  return {
+    access_token: response.data.access_token,
+    role: response.data.role || 'organization_user', // สมมติว่า API ส่ง role ใน token หรือกำหนด default
+  };
+};
 
-// ล็อกอินสำหรับ person_user
-export async function personLogin({ username, password }: { username: string; password: string }) {
-  try {
-    const res = await axios.post(`${BASE_URL}/persons/login`, { username, password }, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    Cookies.set('access_token', res.data.access_token, { expires: 7, secure: true, sameSite: 'strict' });
-    return res.data;
-  } catch (error: any) {
-    logError('personLogin', error);
-    throw new Error(error.response?.data?.message || 'Login failed');
-  }
-}
-
-// ล็อกอินสำหรับ organization_user
-export async function organizationLogin({ username, password }: { username: string; password: string }) {
-  try {
-    const res = await axios.post(`${BASE_URL}/organizations/login`, { username, password }, {
-      headers: { 'Content-Type': 'application/json' },
-    });
-    Cookies.set('access_token', res.data.access_token, { expires: 7, secure: true, sameSite: 'strict' });
-    return res.data;
-  } catch (error: any) {
-    logError('organizationLogin', error);
-    throw new Error(error.response?.data?.message || 'Login failed');
-  }
-}
-
-// ดึง role ปัจจุบันจาก token
-export async function getCurrentRole() {
-  const token = Cookies.get('access_token');
-  if (!token) {
-    throw new Error('No access token found');
-  }
-  try {
-    const res = await axios.get(`${BASE_URL}/currentrole`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-    return res.data.role;
-  } catch (error: any) {
-    logError('getCurrentRole', error);
-    throw new Error(error.response?.data?.message || 'Failed to fetch current role');
-  }
-}
+// ฟังก์ชันสำหรับดึง current role จาก endpoint /currentrole
+export const getCurrentRole = async () => {
+  const token = localStorage.getItem('access_token');
+  const response = await axios.get(`${BACKEND_URL}/currentrole`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.data.role;
+};
